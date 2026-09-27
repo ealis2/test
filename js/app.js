@@ -5,6 +5,7 @@ import { tracker, wakeLockActive } from './tracker.js';
 import * as snd from './sounds.js';
 import * as sci from './science.js';
 import { TESTS } from './tests.js';
+import { maybeShowInstall } from './install.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -67,7 +68,8 @@ function renderNuit() {
     ${isIOS && !isStandalone ? `
       <div class="card install-hint">
         <h2>📲 Installe Somnia sur ton iPhone</h2>
-        <p class="small">Dans Safari, touche <b>Partager</b> <span style="font-size:18px">⎋</span> puis <b>« Sur l'écran d'accueil »</b>. L'app s'ouvrira alors en plein écran, comme une vraie application.</p>
+        <p class="small">Installée, l'app s'ouvre en plein écran, fonctionne hors ligne et le suivi de nuit est plus fiable.</p>
+        <button class="btn primary block" id="btn-install">Installer l'app</button>
       </div>` : ''}
 
     <div class="hero-clock">
@@ -124,6 +126,7 @@ function renderNuit() {
   $('#alarm-on').addEventListener('change', e => { store.setSettings({ alarmOn: e.target.checked }); renderNuit(); });
   $('#alarm-card').addEventListener('click', openAlarmSheet);
   $('#btn-start').addEventListener('click', startNight);
+  $('#btn-install')?.addEventListener('click', () => maybeShowInstall(true));
   $('#btn-manual').addEventListener('click', openManualNight);
   last && $('#last-night').addEventListener('click', () => openNightDetail(last.id));
 }
@@ -977,9 +980,25 @@ function addDemo() {
 // =====================================================================
 // Démarrage
 // =====================================================================
+// Service worker + mise à jour automatique : quand une nouvelle version est publiée,
+// on propose de recharger (jamais pendant une nuit en cours).
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      nw?.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller && !tracker.active) {
+          const t = $('#toast');
+          t.innerHTML = '✨ Nouvelle version disponible <button class="btn" style="padding:6px 10px;margin-left:8px;font-size:13px;background:#6a5cff;color:#fff" id="upd">Mettre à jour</button>';
+          t.hidden = false;
+          $('#upd').addEventListener('click', () => location.reload());
+        }
+      });
+    });
+    setInterval(() => reg.update().catch(() => {}), 3600e3);
+  }).catch(() => {});
 }
+maybeShowInstall();
 
 // Demande à iOS de ne jamais effacer les données de l'app
 navigator.storage?.persist?.().catch(() => {});

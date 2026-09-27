@@ -1,0 +1,45 @@
+# Publie automatiquement Somnia sur GitHub Pages à chaque mise à jour.
+# Adresse : https://<utilisateur>.github.io/<dépôt>/
+# Prérequis (une seule fois) : Settings → Pages → Source : « GitHub Actions ».
+name: Publier Somnia
+
+on:
+  push:
+    branches: [main, claude/iphone-sleep-tracker-app-twjbdm]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier le JavaScript
+        run: for f in js/*.js sw.js; do node --check "$f"; done
+
+      - name: Préparer le site
+        run: |
+          mkdir -p _site
+          cp -r index.html manifest.webmanifest sw.js css js icons _site/
+          touch _site/.nojekyll
+          # Paquet ZIP (pour Hostinger) téléchargeable depuis le site
+          zip -qr _site/somnia-hostinger.zip index.html manifest.webmanifest sw.js .htaccess css js icons api/science.php
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

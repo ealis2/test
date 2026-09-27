@@ -18,6 +18,22 @@ et le panneau Hostinger.
 
 Réglages (⚙️) : objectif de sommeil, âge, capteurs, ville, export/import des données, nuits de démo.
 
+## Installer en un bouton (GitHub Pages, gratuit)
+
+L'app est publiée automatiquement à chaque mise à jour par `.github/workflows/pages.yml`.
+
+**À faire une seule fois (depuis Safari sur l'iPhone, onglet « Version pour ordinateur » si besoin) :**
+1. github.com/ealis2/test → **Settings** → **General** → tout en bas **Change visibility** → **Public**
+   (GitHub Pages est gratuit uniquement pour les dépôts publics ; tes nuits ne sont jamais dans le dépôt).
+2. **Settings** → **Pages** → *Build and deployment* → Source : **GitHub Actions**.
+3. **Actions** → « Publier Somnia » → **Run workflow**.
+
+Lien à ouvrir (et à partager) : **https://ealis2.github.io/test/**
+→ écran d'accueil avec le bouton **« Installer Somnia »** qui guide l'ajout à l'écran d'accueil.
+Sur Android / Chrome, le bouton installe directement l'app en un geste.
+
+Le ZIP pour Hostinger est aussi téléchargeable sur https://ealis2.github.io/test/somnia-hostinger.zip
+
 ## Mettre en ligne sur Hostinger
 
 ### Option A – Déploiement Git (recommandé, mises à jour automatiques)
@@ -96,6 +112,10 @@ js/analysis.js        Estimation des phases, score, statistiques
 js/charts.js          Graphiques SVG
 js/sounds.js          Sons relaxants et sonnerie (Web Audio)
 js/science.js         Données temps réel (Open-Meteo, Europe PMC)
+js/signal.js          Détection de la respiration (autocorrélation)
+js/tests.js           Questionnaires cliniques (ISI, Epworth, rMEQ, STOP-BANG)
+js/install.js         Écran et bouton d'installation
+.github/workflows/    Publication automatique sur GitHub Pages
 api/science.php       Proxy + cache pour les publications scientifiques
 sw.js                 Fonctionnement hors ligne
 manifest.webmanifest  Installation sur l'écran d'accueil
