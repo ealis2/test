@@ -1,0 +1,50 @@
+# Somnia – configuration Apache/LiteSpeed pour Hostinger
+# Fonctionne à la racine (https://cryptologist.pro/) comme dans un sous-dossier
+# (https://cryptologist.pro/sommeil/).
+
+Options -Indexes
+DirectoryIndex index.html
+
+# HTTPS obligatoire (capteurs, micro, géolocalisation et PWA l'exigent sur iPhone)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# Types MIME
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+  AddType text/javascript .js .mjs
+  AddType image/svg+xml .svg
+  AddCharset utf-8 .html .css .js .webmanifest .json
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "microphone=(self), geolocation=(self), accelerometer=(self), gyroscope=(self), screen-wake-lock=(self)"
+
+  # Le service worker et la page doivent toujours être frais (mises à jour immédiates)
+  <FilesMatch "^(sw\.js|index\.html|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+  <FilesMatch "\.(css|js|png|svg)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+  <FilesMatch "^sw\.js$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# Ne jamais exposer les fichiers techniques
+<FilesMatch "^(\.git.*|README\.md|.*\.json\.cache)$">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 /\.git
