@@ -1,7 +1,7 @@
 import { store, uid, fmtDur, fmtTime, fmtDate, fmtShortDate, esc, pad, timeToMinutes, minutesToTime, nightKey } from './store.js';
 import { STAGES, buildNight, scoreLabel, statsFor, tagImpact, bedtimesFor, wakeTimesFrom } from './analysis.js';
 import { hypnogram, miniHypno, phaseBar, legend, scoreRing, durationBars, lineChart, scheduleChart } from './charts.js';
-import { tracker } from './tracker.js';
+import { tracker, wakeLockActive } from './tracker.js';
 import * as snd from './sounds.js';
 import * as sci from './science.js';
 
@@ -84,7 +84,7 @@ function renderNuit() {
     </div>
 
     <button class="btn primary block big" id="btn-start">🌙 Commencer ma nuit</button>
-    <p class="muted tiny center" style="margin-top:8px">Pose l'iPhone sur le matelas, près de l'oreiller, branché au chargeur. L'écran restera allumé (très sombre).</p>
+    <p class="muted tiny center" style="margin-top:8px">Pour une mesure précise : iPhone <b>sur le matelas</b> près de l'oreiller, écran vers le haut, <b>branché</b>, et l'app laissée ouverte. L'écran restera allumé (très sombre).</p>
 
     <div class="section-title">Ce soir</div>
     <div class="card">
@@ -167,10 +167,8 @@ async function startNight() {
   snd.stopAll();
   const live = await tracker.start();
   showNightMode();
-  const miss = [];
-  if (!live.sensors.motion) miss.push('mouvements');
-  if (!live.sensors.mic) miss.push('micro');
-  if (miss.length) toast(`Capteur indisponible : ${miss.join(', ')}. Les phases seront estimées.`, 4000);
+  if (!live.sensors.motion) toast('Capteur de mouvement refusé ou indisponible : les phases seront seulement estimées. Autorise « Mouvement et orientation » pour une vraie mesure.', 5000);
+  else if (store.settings.useMic && !live.sensors.mic) toast('Micro indisponible : les bruits ne seront pas mesurés (le suivi du sommeil fonctionne quand même).', 4000);
 }
 
 function showNightMode() {
@@ -189,6 +187,8 @@ function showNightMode() {
       <div class="meter"><i id="nm-m"></i></div>
       <div class="meta small" style="text-align:left">Sons ${live.sensors.mic ? '' : '(indisponible)'}</div>
       <div class="meter"><i id="nm-n"></i></div>
+      <div class="meta small" id="nm-status" style="text-align:left;margin-bottom:10px"></div>
+      <button class="btn block" id="nm-reenable" style="margin-bottom:10px" hidden>🔄 Réactiver les capteurs</button>
       <button class="btn block hold" id="nm-stop"><i></i><span>Maintenir pour terminer la nuit</span></button>
       <p class="meta tiny">Touchez l'écran pour l'assombrir. Laissez l'app ouverte toute la nuit.</p>
     </div>`;
@@ -207,11 +207,17 @@ function showNightMode() {
     const n = c.noiseN ? c.noiseSum / c.noiseN : 0;
     $('#nm-m', nightEl).style.width = `${Math.max(2, m * 100)}%`;
     $('#nm-n', nightEl).style.width = `${Math.max(2, n * 100)}%`;
+    const warn = [];
+    if (l.motionUsed && !tracker.motionOk && Date.now() - l.start > 10000) warn.push('⚠️ Aucun signal de mouvement');
+    if (!wakeLockActive()) warn.push('⚠️ Écran : désactive le verrouillage auto');
+    $('#nm-status', nightEl).textContent = warn.length ? warn.join(' · ') : '✅ Capteurs actifs · écran maintenu allumé';
+    $('#nm-reenable', nightEl).hidden = !(l.resumed && (!l.sensors.motion || (store.settings.useMic && !l.sensors.mic)));
   };
   update();
   nightEl._u = setInterval(update, 1000);
 
   nightEl.addEventListener('click', e => { if (!e.target.closest('button')) nightEl.classList.toggle('dim'); });
+  $('#nm-reenable', nightEl).addEventListener('click', async () => { await tracker.reenableSensors(); tracker.live.resumed = false; toast('Capteurs réactivés'); });
 
   // Appui long (1,2 s) pour éviter un arrêt accidentel dans le noir
   const stopBtn = $('#nm-stop', nightEl);
@@ -261,11 +267,13 @@ function finishNight() {
     go('nuit');
     return;
   }
-  const hasSensors = raw.sensors.motion || raw.sensors.mic || raw.epochs.some(e => e.m || e.n);
+  const hasSensors = raw.motionUsed || raw.sensors.motion || raw.epochs.some(e => e.c || e.m);
   const night = buildNight({ id: raw.id, start: raw.start, end: raw.end, epochs: raw.epochs, events: raw.events, source: hasSensors ? 'capteurs' : 'estimation' }, store.settings.goalMin);
   store.addNight(night);
   go('nuit');
   openMorning(night.id);
+  const count = store.nights.filter(x => !x.demo).length;
+  if (count % 7 === 0) setTimeout(() => toast('💾 Pense à sauvegarder tes nuits : ⚙️ → Exporter', 4000), 1500);
 }
 
 // Questionnaire du matin
@@ -284,6 +292,12 @@ function openMorning(id) {
     </div>
     ${hypnogram(n.stages, n.start, { events: n.events })}
     ${legend()}
+    <div class="grid3" style="margin-top:12px">
+      <div class="stat center"><div class="v" style="font-size:18px">${fmtDur(n.summary.latency)}</div><div class="l">Endormissement</div></div>
+      <div class="stat center"><div class="v" style="font-size:18px">${Math.round(n.summary.efficiency * 100)} %</div><div class="l">Efficacité</div></div>
+      <div class="stat center"><div class="v" style="font-size:18px">${n.summary.awakenings}</div><div class="l">Réveils</div></div>
+    </div>
+    ${qualityBlock(n)}
     <div class="section-title">Comment te sens-tu ?</div>
     <div class="row between" id="moods">${MOODS.map((m, i) => `<button class="chip" data-v="${i + 1}" style="font-size:26px;padding:8px 12px">${m}</button>`).join('')}</div>
     <div class="section-title">Hier, tu as eu…</div>
@@ -291,6 +305,16 @@ function openMorning(id) {
     <label class="field"><span>Note (rêves, réveils…)</span><textarea id="note" placeholder="Facultatif"></textarea></label>
     <button class="btn primary block" id="m-save">Enregistrer</button>
   `, root => bindNightEdit(root, n, () => { closeSheet(); go(tab); toast('Nuit enregistrée ✅'); }));
+}
+
+function qualityBlock(n) {
+  const q = n.quality;
+  if (!q) return '';
+  const cls = { 'élevée': 'good', moyenne: 'warn', faible: 'bad', estimation: 'warn' }[q.level] || 'warn';
+  return `<div class="card" style="background:var(--card);margin-top:12px">
+    <div class="row between"><b>🎯 Fiabilité de la mesure</b><span class="pill ${cls}">${q.level === 'estimation' ? 'Estimation' : q.level[0].toUpperCase() + q.level.slice(1)}${q.pct ? ' · ' + q.pct + ' %' : ''}</span></div>
+    ${q.reasons.map(r => `<p class="muted small" style="margin:6px 0 0">• ${esc(r)}</p>`).join('')}
+  </div>`;
 }
 
 function bindNightEdit(root, n, done) {
@@ -396,9 +420,10 @@ function openNightDetail(id) {
     <div class="grid2" style="margin-top:12px">
       <div class="stat"><div class="v">${Math.round(s.efficiency * 100)} %</div><div class="l">Efficacité</div></div>
       <div class="stat"><div class="v">${fmtDur(s.latency)}</div><div class="l">Endormissement</div></div>
-      <div class="stat"><div class="v">${s.awakenings}</div><div class="l">Réveils nocturnes</div></div>
-      <div class="stat"><div class="v">${n.events?.length || 0}</div><div class="l">Bruits détectés</div></div>
+      <div class="stat"><div class="v">${s.awakenings}</div><div class="l">Réveils (≥ 3 min)</div></div>
+      <div class="stat"><div class="v">${fmtDur(s.waso ?? 0)}</div><div class="l">Éveil nocturne total</div></div>
     </div>
+    ${qualityBlock(n)}
     <div class="card" style="margin-top:12px;background:var(--card)">
       ${[['D', s.deep], ['L', s.light], ['R', s.rem], ['W', s.awake]].map(([k, v]) => `
         <div class="row between small" style="margin:6px 0"><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${STAGES[k].hex};margin-right:8px"></i>${STAGES[k].name}</span><span><b>${fmtDur(v)}</b> <span class="muted">${pct(v)} %</span></span></div>`).join('')}
@@ -790,7 +815,7 @@ function openSettings() {
     <button class="btn danger block" id="reset">Tout effacer</button>
 
     <div class="section-title">À propos</div>
-    <p class="muted small">Somnia v1.0 · Application web installable (PWA). Les phases de sommeil sont estimées par actigraphie et modèle des cycles, comme la plupart des applis grand public : ce n'est pas une polysomnographie ni un avis médical.</p>
+    <p class="muted small">Somnia v1.1 · Application web installable (PWA). Éveil/sommeil calculés par l'algorithme d'actigraphie de Cole-Kripke avec les règles de Webster (méthodes validées face à la polysomnographie). Les phases profond/léger/paradoxal sont une estimation, comme dans toutes les applis sans montre : ce n'est pas un avis médical.</p>
     <button class="btn primary block" id="s-close">Terminé</button>
   `, root => {
     const goal = $('#goal', root);
@@ -861,6 +886,9 @@ function addDemo() {
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+// Demande à iOS de ne jamais effacer les données de l'app
+navigator.storage?.persist?.().catch(() => {});
 
 go('nuit');
 

@@ -1,5 +1,5 @@
 // Service worker : l'app fonctionne hors ligne (sauf les données en temps réel).
-const VERSION = 'somnia-v1.0.0';
+const VERSION = 'somnia-v1.1.0';
 const SHELL = [
   './',
   'index.html',

@@ -22,6 +22,8 @@
   --tabbar-h: 58px;
 }
 
+[hidden] { display: none !important; }
+
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body {

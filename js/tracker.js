@@ -9,7 +9,10 @@ let live = null;          // { id, start, epochs, events, alarmAt, windowStart, 
 let wakeLock = null;
 let micStream = null, analyser = null, micBuf = null;
 let tickTimer = null, sampleTimer = null;
-let acc = { motion: 0, samples: 0, noiseSum: 0, noiseMax: 0, noiseN: 0 };
+const emptyAcc = () => ({ motion: 0, counts: 0, samples: 0, noiseSum: 0, noiseMax: 0, noiseN: 0 });
+let acc = emptyAcc();
+let grav = null;          // estimation de la gravité (filtre passe-bas) si e.acceleration est absent
+let lastSampleAt = 0;
 let lastAcc = null;
 let loudSince = 0;
 let listeners = { tick: [], alarm: [] };
@@ -20,7 +23,8 @@ export const tracker = {
   get live() { return live; },
   get alarmRinging() { return alarmRinging; },
   on(evt, fn) { listeners[evt].push(fn); },
-  start, stop, resume, snooze, dismissAlarm,
+  start, stop, resume, snooze, dismissAlarm, reenableSensors,
+  get motionOk() { return !!live?.sensors.motion && Date.now() - lastSampleAt < 10000; },
   current: () => ({ ...acc }),
 };
 
@@ -66,6 +70,7 @@ async function start() {
     alarmAt,
     windowStart: alarmAt ? alarmAt - s.smartWindow * 60000 : null,
     sensors,
+    motionUsed: sensors.motion,
   };
   attach();
   store.saveLive(live);
@@ -81,13 +86,14 @@ function resume() {
   live = saved;
   live.sensors = { motion: false, mic: false };
   if ('DeviceMotionEvent' in window && typeof DeviceMotionEvent.requestPermission !== 'function') live.sensors.motion = true;
+  live.resumed = true;
   attach();
   return true;
 }
 
 function attach() {
-  acc = { motion: 0, samples: 0, noiseSum: 0, noiseMax: 0, noiseN: 0 };
-  lastAcc = null;
+  acc = emptyAcc();
+  lastAcc = null; grav = null;
   if (live.sensors.motion) window.addEventListener('devicemotion', onMotion);
   if (micStream) {
     const c = audioCtx();
@@ -103,16 +109,25 @@ function attach() {
   tickTimer = setInterval(tick, 1000);
 }
 
+// Actigraphie : on mesure l'accélération « propre » (sans la gravité) et on compte,
+// comme un actigraphe médical, les échantillons dépassant un seuil (« activity counts »).
+const COUNT_THRESHOLD = 0.035; // m/s² — au-dessus du bruit du capteur d'un iPhone posé à plat
 function onMotion(e) {
-  const a = e.accelerationIncludingGravity || e.acceleration;
-  if (!a || a.x == null) return;
-  if (lastAcc) {
-    const d = Math.abs(a.x - lastAcc.x) + Math.abs(a.y - lastAcc.y) + Math.abs(a.z - lastAcc.z);
-    // On ignore le bruit du capteur (< 0,02 m/s²)
-    acc.motion += Math.max(0, d - 0.02);
-    acc.samples++;
+  let x, y, z;
+  const lin = e.acceleration;
+  if (lin && lin.x != null) { x = lin.x; y = lin.y; z = lin.z; }
+  else {
+    const a = e.accelerationIncludingGravity;
+    if (!a || a.x == null) return;
+    if (!grav) grav = { x: a.x, y: a.y, z: a.z };
+    grav.x = grav.x * 0.95 + a.x * 0.05; grav.y = grav.y * 0.95 + a.y * 0.05; grav.z = grav.z * 0.95 + a.z * 0.05;
+    x = a.x - grav.x; y = a.y - grav.y; z = a.z - grav.z;
   }
-  lastAcc = { x: a.x, y: a.y, z: a.z };
+  const mag = Math.sqrt(x * x + y * y + z * z);
+  acc.motion += Math.max(0, mag - COUNT_THRESHOLD);
+  if (mag > COUNT_THRESHOLD) acc.counts++;
+  acc.samples++;
+  lastSampleAt = Date.now();
 }
 
 function sampleMic() {
@@ -143,8 +158,11 @@ function tick() {
   while (live.epochs.length < expected) {
     const m = acc.samples ? Math.min(1, acc.motion / acc.samples * 4) : 0;
     const n = acc.noiseN ? Math.min(1, acc.noiseSum / acc.noiseN * 0.6 + acc.noiseMax * 0.4) : 0;
-    live.epochs.push({ m, n });
-    acc = { motion: 0, samples: 0, noiseSum: 0, noiseMax: 0, noiseN: 0 };
+    // Trou de mesure : l'app a été mise en pause (écran verrouillé…) → on le signale
+    // au lieu de le compter comme du sommeil immobile.
+    const g = live.motionUsed && acc.samples < 60 ? 1 : 0;
+    live.epochs.push({ m, n, c: acc.counts, g });
+    acc = emptyAcc();
     store.saveLive(live);
   }
   checkAlarm(now);
@@ -157,10 +175,9 @@ function checkAlarm(now) {
   if (!live.alarmAt || alarmRinging) return;
   let ring = now >= live.alarmAt;
   if (!ring && live.windowStart && now >= live.windowStart && live.sensors.motion) {
-    const recent = live.epochs.slice(-3);
-    const all = live.epochs.map(e => e.m).sort((a, b) => a - b);
-    const p70 = all[Math.floor(all.length * 0.7)] || 0.05;
-    if (recent.length === 3 && recent.filter(e => e.m > p70 && e.m > 0.01).length >= 2) ring = true;
+    // Sommeil léger probable : au moins 2 des 3 dernières minutes avec des mouvements nets
+    const recent = live.epochs.slice(-3).filter(e => !e.g);
+    if (recent.length === 3 && recent.filter(e => (e.c || 0) >= 8).length >= 2) ring = true;
   }
   if (ring) {
     alarmRinging = true;
@@ -184,9 +201,39 @@ function dismissAlarm() {
 }
 
 async function requestWakeLock() {
+  if (wakeLock && !wakeLock.released) return;
   try {
-    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { if (live && document.visibilityState === 'visible') setTimeout(requestWakeLock, 500); });
+    }
   } catch { wakeLock = null; }
+}
+export const wakeLockActive = () => !!wakeLock && !wakeLock.released;
+
+// Après un rechargement, iOS exige un nouveau geste (tap) pour réautoriser les capteurs
+async function reenableSensors() {
+  if (!live) return;
+  if (!live.sensors.motion && 'DeviceMotionEvent' in window) {
+    try {
+      const r = typeof DeviceMotionEvent.requestPermission === 'function' ? await DeviceMotionEvent.requestPermission() : 'granted';
+      if (r === 'granted') { live.sensors.motion = true; window.addEventListener('devicemotion', onMotion); }
+    } catch {}
+  }
+  if (!micStream && store.settings.useMic && navigator.mediaDevices?.getUserMedia) {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const c = audioCtx();
+      const src = c.createMediaStreamSource(micStream);
+      analyser = c.createAnalyser(); analyser.fftSize = 2048;
+      micBuf = new Float32Array(analyser.fftSize);
+      src.connect(analyser);
+      clearInterval(sampleTimer); sampleTimer = setInterval(sampleMic, 250);
+      live.sensors.mic = true;
+    } catch {}
+  }
+  requestWakeLock();
+  store.saveLive(live);
 }
 
 function onVisibility() {

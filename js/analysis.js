@@ -52,67 +52,155 @@ export function modelStages(durationMin, seed = 'x', latency = 12) {
   return out.join('');
 }
 
-function percentileRanks(arr) {
-  const sorted = [...arr].sort((a, b) => a - b);
-  const n = sorted.length;
-  return arr.map(v => {
-    let lo = 0, hi = n;
-    while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < v) lo = mid + 1; else hi = mid; }
-    return n > 1 ? lo / (n - 1) : 0;
-  });
+// ---------------------------------------------------------------------------
+// ANALYSE DES CAPTEURS
+// 1) Éveil / sommeil : algorithme d'actigraphie de Cole-Kripke (Sleep, 1992),
+//    pondération des minutes voisines, puis règles de correction de Webster
+//    (validées face à la polysomnographie, ~85-90 % d'accord éveil/sommeil).
+// 2) Endormissement : premier bloc d'au moins 10 min de sommeil continu.
+// 3) Cycles : découpés sur TES mouvements (les changements de position marquent
+//    souvent la fin d'un cycle), bornés entre 70 et 120 min.
+// 4) Profondeur : position dans le cycle + niveau d'activité résiduelle.
+// ---------------------------------------------------------------------------
+const CK_W = [404, 598, 326, 441, 1408, 508, 350]; // poids des minutes i-4 … i+2
+const CK_SCALE = 1600; // calibré pour qu'un simple retournement (< 1 min) ne soit pas compté comme un réveil
+const COUNT_REF = 15; // nombre de « counts »/min correspondant à un mouvement net
+
+function quantile(arr, q) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(q * s.length))];
 }
 
-function smooth(arr, w = 2) {
-  return arr.map((_, i) => {
-    let s = 0, c = 0;
-    for (let k = -w; k <= w; k++) {
-      const v = arr[i + k];
-      if (v !== undefined) { const wt = 1 / (1 + Math.abs(k)); s += v * wt; c += wt; }
-    }
-    return s / c;
-  });
-}
-
-// Estimation des phases à partir des époques mesurées : [{m: mouvement, n: bruit}]
-export function stagesFromEpochs(epochs, seed) {
-  const N = epochs.length;
-  if (N < 20) return modelStages(N, seed, Math.min(12, N));
-
-  const motion = epochs.map(e => e.m || 0);
-  const noise = epochs.map(e => e.n || 0);
-  const hasMotion = motion.some(v => v > 0.002);
-  const hasNoise = noise.some(v => v > 0.002);
-  if (!hasMotion && !hasNoise) return modelStages(N, seed);
-
-  const act = motion.map((m, i) => (hasMotion ? m : 0) * 0.75 + (hasNoise ? noise[i] : 0) * 0.25);
-  const s = smooth(act, 2);
-  const rank = percentileRanks(s);
-  const model = modelStages(N, seed);
-  const maxAct = Math.max(...act) || 1;
-
+function runs(arr) {
   const out = [];
-  for (let i = 0; i < N; i++) {
-    const r = rank[i];
-    const strong = act[i] / maxAct > 0.35;
-    const half = i < N / 2;
-    let st;
-    if (r > 0.9 || strong) st = 'W';
-    else if (r > 0.6) st = 'L';
-    else if (r < (half ? 0.3 : 0.15)) st = 'D';
-    else st = 'L';
-    // Le paradoxal : corps immobile (atonie) mais pas en sommeil profond,
-    // plutôt en fin de cycle et en seconde partie de nuit → on s'aide du modèle.
-    if (st !== 'W' && model[i] === 'R' && r < 0.7) st = 'R';
-    if (st === 'D' && model[i] === 'R') st = 'R';
-    out.push(st);
+  let i = 0;
+  while (i < arr.length) {
+    let j = i;
+    while (j < arr.length && arr[j] === arr[i]) j++;
+    out.push({ v: arr[i], s: i, e: j, len: j - i });
+    i = j;
   }
-  // Latence d'endormissement : début de nuit agité = éveil
-  for (let i = 0; i < Math.min(N, 30); i++) {
-    if (rank[i] > 0.5) out[i] = 'W'; else break;
-  }
-  out[N - 1] = 'W';
-  return mergeShortBouts(out, 3).join('');
+  return out;
 }
+
+// Règles de Webster et al. (1982) appliquées au tableau booléen « éveillé »
+function websterRescore(wake) {
+  const w = [...wake];
+  const r = runs(w);
+  for (let k = 1; k < r.length; k++) {
+    const prev = r[k - 1], cur = r[k];
+    if (!prev.v || cur.v) continue; // éveil suivi de sommeil
+    const n = prev.len >= 15 ? 4 : prev.len >= 10 ? 3 : prev.len >= 4 ? 1 : 0;
+    for (let i = cur.s; i < Math.min(cur.e, cur.s + n); i++) w[i] = true;
+  }
+  const r2 = runs(w);
+  for (let k = 1; k < r2.length - 1; k++) {
+    const a = r2[k - 1], cur = r2[k], b = r2[k + 1];
+    if (cur.v) continue;
+    if ((cur.len <= 6 && a.len >= 10 && b.len >= 10) || (cur.len <= 10 && a.len >= 20 && b.len >= 20)) {
+      for (let i = cur.s; i < cur.e; i++) w[i] = true;
+    }
+  }
+  return w;
+}
+
+export function analyzeEpochs(epochs, seed) {
+  const N = epochs.length;
+  const gap = epochs.map(e => !!e.g);
+  const counts = epochs.map(e => (e.c != null ? e.c : Math.round((e.m || 0) * 100)));
+  const valid = counts.filter((_, i) => !gap[i]);
+  const reasons = [];
+
+  if (N < 30 || valid.length < N * 0.5) {
+    if (N < 30) reasons.push('Nuit trop courte pour une analyse fiable.');
+    else reasons.push('Plus de la moitié de la nuit sans mesure (app mise en pause ou écran verrouillé).');
+    return { stages: modelStages(N, seed, Math.min(12, N)), quality: { level: 'faible', pct: 30, reasons } };
+  }
+
+  // Bruit de fond du capteur retiré, puis mise à l'échelle absolue
+  const base = Math.min(quantile(valid, 0.5), quantile(valid, 0.2) + 5);
+  const x = counts.map((c, i) => (gap[i] ? 0 : Math.min(3, Math.max(0, c - base) / COUNT_REF)));
+
+  // 1) Cole-Kripke
+  let wake = x.map((_, i) => {
+    let d = 0;
+    for (let k = -4; k <= 2; k++) { const v = x[i + k]; if (v !== undefined) d += CK_W[k + 4] * v; }
+    return d / CK_SCALE >= 1;
+  });
+  // Trous de mesure : on reprend l'état précédent (on n'invente pas de sommeil profond)
+  for (let i = 0; i < N; i++) if (gap[i]) wake[i] = i > 0 ? wake[i - 1] : true;
+  wake = websterRescore(wake);
+
+  // 2) Endormissement et réveil final
+  let onset = -1;
+  for (const r of runs(wake)) if (!r.v && r.len >= 10) { onset = r.s; break; }
+  if (onset < 0) {
+    reasons.push('Aucune période de sommeil continu détectée.');
+    return { stages: 'W'.repeat(N), quality: { level: 'moyenne', pct: 50, reasons } };
+  }
+  let finalWake = N;
+  for (let i = N - 1; i >= onset; i--) if (!wake[i]) { finalWake = i + 1; break; }
+  for (let i = 0; i < onset; i++) wake[i] = true;
+  for (let i = finalWake; i < N; i++) wake[i] = true;
+
+  // 3) Cycles personnalisés
+  const bounds = [onset];
+  let last = onset;
+  for (let i = onset + 1; i < finalWake; i++) {
+    const len = i - last;
+    if ((len >= 70 && (x[i] >= 1 || wake[i])) || len >= 120) { bounds.push(i); last = i; }
+  }
+  bounds.push(finalWake);
+
+  // Activité résiduelle lissée (±5 min) pour estimer la profondeur
+  const act = x.map((_, i) => {
+    let s = 0, c = 0;
+    for (let k = -5; k <= 5; k++) { const v = x[i + k]; if (v !== undefined && !gap[i + k]) { const w = 1 / (1 + Math.abs(k)); s += v * w; c += w; } }
+    return c ? s / c : 0;
+  });
+
+  // 4) Phases
+  const out = new Array(N).fill('W');
+  for (let k = 0; k < bounds.length - 1; k++) {
+    const s0 = bounds[k], e0 = bounds[k + 1], len = e0 - s0;
+    const deepFrac = Math.max(0.05, 0.45 - 0.12 * k);
+    const remFrac = Math.min(0.4, 0.1 + 0.07 * k) * (len >= 45 ? 1 : 0.5);
+    for (let i = s0; i < e0; i++) {
+      if (wake[i]) continue;
+      const p = (i - s0) / len;
+      let st;
+      if (p < 0.1) st = 'L';
+      else if (p < 0.1 + deepFrac) st = act[i] < 0.12 ? 'D' : 'L';
+      else if (p < 1 - remFrac) st = 'L';
+      else st = act[i] < 0.4 ? 'R' : 'L';
+      // Première heure : pas de paradoxal (latence REM normale ~70-90 min)
+      if (st === 'R' && i - onset < 60) st = 'L';
+      out[i] = st;
+    }
+  }
+  // Mouvement bref (≤ 2 min) pendant le sommeil = changement de position / micro-éveil
+  // → compté en sommeil léger, comme en polysomnographie où un éveil doit durer plus de la moitié de l'époque.
+  const r = runs(out);
+  for (let k = 1; k < r.length - 1; k++) {
+    if (r[k].v === 'W' && r[k].len <= 2) for (let i = r[k].s; i < r[k].e; i++) out[i] = 'L';
+  }
+  const stages = mergeShortBouts(out, 3).join('');
+
+  // Indice de fiabilité de la mesure
+  let pct = 95;
+  const gapFrac = gap.filter(Boolean).length / N;
+  if (gapFrac > 0.02) { pct -= Math.round(gapFrac * 150); reasons.push(`${Math.round(gapFrac * 100)} % de la nuit sans mesure (app en pause).`); }
+  const moves = x.filter(v => v >= 1).length;
+  if (moves < Math.max(3, N / 120)) { pct -= 45; reasons.push('Très peu de mouvements captés : l\'iPhone était-il bien posé sur le matelas ?'); }
+  if (N < 180) { pct -= 15; reasons.push('Nuit de moins de 3 h : estimation moins précise.'); }
+  pct = Math.max(20, Math.min(95, pct));
+  if (!reasons.length) reasons.push('Mesure complète et cohérente toute la nuit.');
+  return { stages, quality: { level: pct >= 80 ? 'élevée' : pct >= 55 ? 'moyenne' : 'faible', pct, reasons } };
+}
+
+// Compatibilité : ancienne signature
+export function stagesFromEpochs(epochs, seed) { return analyzeEpochs(epochs, seed).stages; }
 
 // Une phase de moins de `min` minutes est absorbée par la phase précédente
 // (les vraies phases durent plusieurs minutes ; ça évite un hypnogramme haché).
@@ -133,32 +221,39 @@ function mergeShortBouts(arr, min) {
 
 export function summarize(stages) {
   const c = { W: 0, R: 0, L: 0, D: 0 };
-  let awakenings = 0;
-  for (let i = 0; i < stages.length; i++) {
-    c[stages[i]]++;
-    if (stages[i] === 'W' && i > 0 && stages[i - 1] !== 'W') awakenings++;
-  }
+  for (const ch of stages) c[ch]++;
   const first = stages.search(/[LDR]/);
+  const lastSleep = Math.max(stages.lastIndexOf('L'), stages.lastIndexOf('D'), stages.lastIndexOf('R'));
   const latency = first < 0 ? stages.length : first;
+  // Réveils nocturnes : épisodes d'éveil d'au moins 3 min entre l'endormissement et le réveil final
+  let awakenings = 0, waso = 0;
+  if (first >= 0) {
+    for (const r of runs([...stages.slice(first, lastSleep + 1)])) {
+      if (r.v === 'W') { waso += r.len; if (r.len >= 3) awakenings++; }
+    }
+  }
   const inBed = stages.length;
   const asleep = c.R + c.L + c.D;
   return {
-    inBed, asleep, latency,
+    inBed, asleep, latency, waso, awakenings,
     awake: c.W, rem: c.R, light: c.L, deep: c.D,
-    awakenings: Math.max(0, awakenings - 1), // le réveil final ne compte pas
     efficiency: inBed ? asleep / inBed : 0,
   };
 }
 
-// Score de 0 à 100 inspiré des critères de la National Sleep Foundation (Ohayon et al., 2017)
+// Score de 0 à 100 basé sur les critères de qualité de la National Sleep Foundation
+// (Ohayon et al., Sleep Health 2017) : durée, efficacité, latence, éveils, WASO.
+// Les phases (estimées) ne pèsent que 10 points.
 export function computeScore(sum, goalMin) {
   const durPts = 40 * Math.min(1, sum.asleep / goalMin) - (sum.asleep > goalMin + 120 ? 5 : 0);
-  const effPts = 25 * Math.min(1, Math.max(0, (sum.efficiency - 0.65) / (0.9 - 0.65)));
+  const effPts = 20 * Math.min(1, Math.max(0, (sum.efficiency - 0.65) / (0.9 - 0.65)));
+  const latPts = 10 * (sum.latency <= 15 ? 1 : sum.latency <= 30 ? 0.75 : sum.latency <= 45 ? 0.35 : 0);
+  const waso = sum.waso ?? 0;
+  const wasoPts = 10 * (waso <= 20 ? 1 : Math.max(0, 1 - (waso - 20) / 70));
+  const wakePts = 10 * (sum.awakenings <= 1 ? 1 : Math.max(0, 1 - (sum.awakenings - 1) / 4));
   const restor = sum.asleep ? (sum.deep + sum.rem) / sum.asleep : 0;
-  const phasePts = 20 * Math.min(1, restor / 0.4);
-  const latPts = 7 * (sum.latency <= 20 ? 1 : sum.latency <= 45 ? 0.5 : 0);
-  const wakePts = 8 * Math.max(0, 1 - sum.awakenings / 6);
-  return Math.round(Math.max(0, Math.min(100, durPts + effPts + phasePts + latPts + wakePts)));
+  const phasePts = 10 * Math.min(1, restor / 0.4);
+  return Math.round(Math.max(0, Math.min(100, durPts + effPts + latPts + wasoPts + wakePts + phasePts)));
 }
 
 export function scoreLabel(score) {
@@ -171,13 +266,17 @@ export function scoreLabel(score) {
 // Construit l'objet "nuit" complet
 export function buildNight({ id, start, end, epochs = [], events = [], source, seed }, goalMin) {
   const minutes = Math.max(1, Math.round((end - start) / 60000));
-  const stages = source === 'capteurs' && epochs.length
-    ? stagesFromEpochs(epochs, seed || id)
-    : modelStages(minutes, seed || id);
+  let stages, quality;
+  if (source === 'capteurs' && epochs.length) {
+    ({ stages, quality } = analyzeEpochs(epochs, seed || id));
+  } else {
+    stages = modelStages(minutes, seed || id);
+    quality = { level: 'estimation', pct: null, reasons: [source === 'manuel' ? 'Nuit saisie à la main : durée exacte, phases estimées par le modèle des cycles.' : 'Aucun capteur disponible : phases estimées par le modèle des cycles.'] };
+  }
   const sum = summarize(stages);
   return {
-    id, start, end, source, stages, events,
-    epochs: epochs.map(e => [Math.round(e.m * 1000) / 1000, Math.round(e.n * 1000) / 1000]),
+    id, start, end, source, stages, events, quality,
+    epochs: epochs.map(e => [Math.round((e.m || 0) * 1000) / 1000, Math.round((e.n || 0) * 1000) / 1000, e.c || 0, e.g ? 1 : 0]),
     summary: sum,
     score: computeScore(sum, goalMin),
     mood: null, tags: [], note: '',

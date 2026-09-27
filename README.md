@@ -27,7 +27,11 @@ Réglages (⚙️) : objectif de sommeil, âge, capteurs, ville, export/import d
    ⚠️ Le déploiement à la racine exige un `public_html` vide : si ton site crypto y est déjà, utilise `sommeil`.
 4. Cliquer **Créer**, puis **Déployer**. (Optionnel : activer le webhook pour déployer à chaque push.)
 
-### Option B – Gestionnaire de fichiers
+### Option B – Sans GitHub, depuis l'iPhone (fichier ZIP)
+Utiliser `somnia-hostinger.zip` (instructions dans `LISEZ-MOI.txt` à l'intérieur) : le téléverser dans
+`public_html/sommeil` via le Gestionnaire de fichiers de hPanel, puis « Extraire ».
+
+### Option C – Gestionnaire de fichiers (ZIP GitHub)
 1. Télécharger le dépôt en ZIP depuis GitHub (bouton **Code → Download ZIP**).
 2. hPanel → **Gestionnaire de fichiers** → `public_html` (ou créer `public_html/sommeil`).
 3. Téléverser le ZIP, clic droit → **Extraire**, et vérifier que `index.html` est directement dans le dossier.
@@ -43,6 +47,16 @@ Réglages (⚙️) : objectif de sommeil, âge, capteurs, ville, export/import d
 1. Ouvrir **Safari** (pas Chrome) sur `https://cryptologist.pro/sommeil/` (ou la racine).
 2. Toucher **Partager** ⎋ → **Sur l'écran d'accueil** → **Ajouter**.
 3. Lancer Somnia depuis l'icône : l'app s'ouvre en plein écran, fonctionne hors ligne.
+
+## Précision des analyses
+- **Éveil / sommeil** : algorithme d'actigraphie de **Cole-Kripke** (Sleep, 1992) + règles de correction de
+  **Webster** (1982), méthodes validées face à la polysomnographie (~85-90 % d'accord minute par minute).
+  Calibré pour qu'un simple retournement ne compte pas comme un réveil.
+- **Endormissement** : premier bloc de 10 min de sommeil continu. **Réveils** : éveils de 3 min ou plus.
+- **Cycles** : découpés sur tes propres mouvements (70-120 min) plutôt que sur une durée fixe.
+- **Phases profond / léger / paradoxal** : estimation (aucun téléphone ne peut les mesurer sans capteur cardiaque/cérébral).
+- **Indice de fiabilité** par nuit : détecte les coupures de mesure (app en pause), un iPhone posé ailleurs que sur le matelas, les nuits trop courtes.
+- Le **score** repose surtout sur les données mesurées (durée, efficacité, endormissement, éveils) ; les phases estimées ne pèsent que 10 points.
 
 ## Utilisation la nuit
 1. Brancher l'iPhone au chargeur, le poser **sur le matelas** près de l'oreiller, écran vers le haut.
