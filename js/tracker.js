@@ -1,14 +1,19 @@
 // Suivi de la nuit : accéléromètre + micro (niveau sonore uniquement, rien n'est enregistré),
-// maintien de l'écran allumé et réveil intelligent.
+// respiration, maintien de l'écran allumé et réveil intelligent.
 import { store, uid, timeToMinutes } from './store.js';
 import { audioCtx, startAlarm, stopAlarm } from './sounds.js';
+import { FS, breathing } from './signal.js';
 
 const EPOCH_MS = 60000;
 
 let live = null;          // { id, start, epochs, events, alarmAt, windowStart, sensors }
 let wakeLock = null;
 let micStream = null, analyser = null, micBuf = null;
-let tickTimer = null, sampleTimer = null;
+let tickTimer = null, sampleTimer = null, binTimer = null;
+// Signaux à 4 Hz de la minute en cours (respiration) : vibrations du matelas x/y/z + enveloppe sonore
+let sig = { ax: [], ay: [], az: [], snd: [] };
+let bin = { x: 0, y: 0, z: 0, n: 0 };
+let lastLvl = 0;
 const emptyAcc = () => ({ motion: 0, counts: 0, samples: 0, noiseSum: 0, noiseMax: 0, noiseN: 0 });
 let acc = emptyAcc();
 let grav = null;          // estimation de la gravité (filtre passe-bas) si e.acceleration est absent
@@ -95,18 +100,33 @@ function attach() {
   acc = emptyAcc();
   lastAcc = null; grav = null;
   if (live.sensors.motion) window.addEventListener('devicemotion', onMotion);
-  if (micStream) {
-    const c = audioCtx();
-    const src = c.createMediaStreamSource(micStream);
-    analyser = c.createAnalyser();
-    analyser.fftSize = 2048;
-    micBuf = new Float32Array(analyser.fftSize);
-    src.connect(analyser); // pas connecté aux haut-parleurs
-    sampleTimer = setInterval(sampleMic, 250);
-  }
+  if (micStream) setupMic();
+  sig = { ax: [], ay: [], az: [], snd: [] };
+  binTimer = setInterval(pushBin, 1000 / FS);
   requestWakeLock();
   document.addEventListener('visibilitychange', onVisibility);
   tickTimer = setInterval(tick, 1000);
+}
+
+function setupMic() {
+  const c = audioCtx();
+  const src = c.createMediaStreamSource(micStream);
+  // Bande 150-1500 Hz : celle de la respiration et du ronflement (on écarte grondements et sifflements)
+  const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 150;
+  const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500;
+  analyser = c.createAnalyser();
+  analyser.fftSize = 2048;
+  micBuf = new Float32Array(analyser.fftSize);
+  src.connect(hp).connect(lp).connect(analyser); // jamais connecté aux haut-parleurs
+  clearInterval(sampleTimer);
+  sampleTimer = setInterval(sampleMic, 1000 / FS);
+}
+
+// Échantillonnage à 4 Hz pour l'analyse de la respiration
+function pushBin() {
+  if (bin.n) { sig.ax.push(bin.x / bin.n); sig.ay.push(bin.y / bin.n); sig.az.push(bin.z / bin.n); }
+  bin = { x: 0, y: 0, z: 0, n: 0 };
+  if (analyser) sig.snd.push(lastLvl);
 }
 
 // Actigraphie : on mesure l'accélération « propre » (sans la gravité) et on compte,
@@ -114,6 +134,8 @@ function attach() {
 const COUNT_THRESHOLD = 0.035; // m/s² — au-dessus du bruit du capteur d'un iPhone posé à plat
 function onMotion(e) {
   let x, y, z;
+  const ag = e.accelerationIncludingGravity;
+  if (ag && ag.x != null) { bin.x += ag.x; bin.y += ag.y; bin.z += ag.z; bin.n++; }
   const lin = e.acceleration;
   if (lin && lin.x != null) { x = lin.x; y = lin.y; z = lin.z; }
   else {
@@ -139,6 +161,7 @@ function sampleMic() {
   // Échelle 0-1 (log) : ~ -70 dBFS → 0, -20 dBFS → 1
   const db = 20 * Math.log10(rms + 1e-9);
   const lvl = Math.max(0, Math.min(1, (db + 70) / 50));
+  lastLvl = lvl;
   acc.noiseSum += lvl; acc.noiseN++;
   acc.noiseMax = Math.max(acc.noiseMax, lvl);
   // Événement sonore : > 0,55 pendant au moins 1 s (toux, ronflement, bruit extérieur…)
@@ -161,7 +184,24 @@ function tick() {
     // Trou de mesure : l'app a été mise en pause (écran verrouillé…) → on le signale
     // au lieu de le compter comme du sommeil immobile.
     const g = live.motionUsed && acc.samples < 60 ? 1 : 0;
-    live.epochs.push({ m, n, c: acc.counts, g });
+    const ep = { m, n, c: acc.counts, g };
+    // Respiration : on garde la source la plus régulière (matelas ou son)
+    let best = null;
+    for (const k of ['ax', 'ay', 'az']) {
+      const b = breathing(sig[k]);
+      if (b && b.bpm && (!best || b.r > best.r)) best = { ...b, src: 'a' };
+    }
+    const bs = breathing(sig.snd);
+    if (bs && bs.bpm && (!best || bs.r > best.r)) best = { ...bs, src: 's' };
+    if (best && best.r >= 0.3) { ep.br = best.bpm; ep.rr = best.r; ep.bs = best.src; }
+    // Indices pour la détection du ronflement (son périodique au rythme respiratoire)
+    if (sig.snd.length > 60) {
+      const sorted = [...sig.snd].sort((a, b) => a - b);
+      ep.sa = Math.round((sorted[Math.floor(sorted.length * 0.9)] - sorted[Math.floor(sorted.length * 0.1)]) * 100) / 100;
+      ep.sr = bs ? bs.r : 0;
+    }
+    live.epochs.push(ep);
+    sig = { ax: [], ay: [], az: [], snd: [] };
     acc = emptyAcc();
     store.saveLive(live);
   }
@@ -223,12 +263,7 @@ async function reenableSensors() {
   if (!micStream && store.settings.useMic && navigator.mediaDevices?.getUserMedia) {
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-      const c = audioCtx();
-      const src = c.createMediaStreamSource(micStream);
-      analyser = c.createAnalyser(); analyser.fftSize = 2048;
-      micBuf = new Float32Array(analyser.fftSize);
-      src.connect(analyser);
-      clearInterval(sampleTimer); sampleTimer = setInterval(sampleMic, 250);
+      setupMic();
       live.sensors.mic = true;
     } catch {}
   }
@@ -244,7 +279,7 @@ function onVisibility() {
 function stop() {
   if (!live) return null;
   dismissAlarm();
-  clearInterval(tickTimer); clearInterval(sampleTimer);
+  clearInterval(tickTimer); clearInterval(sampleTimer); clearInterval(binTimer);
   window.removeEventListener('devicemotion', onMotion);
   document.removeEventListener('visibilitychange', onVisibility);
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }

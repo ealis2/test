@@ -105,7 +105,7 @@ function websterRescore(wake) {
   return w;
 }
 
-export function analyzeEpochs(epochs, seed) {
+export function analyzeEpochs(epochs, seed, ctx = {}) {
   const N = epochs.length;
   const gap = epochs.map(e => !!e.g);
   const counts = epochs.map(e => (e.c != null ? e.c : Math.round((e.m || 0) * 100)));
@@ -153,32 +153,8 @@ export function analyzeEpochs(epochs, seed) {
   }
   bounds.push(finalWake);
 
-  // Activité résiduelle lissée (±5 min) pour estimer la profondeur
-  const act = x.map((_, i) => {
-    let s = 0, c = 0;
-    for (let k = -5; k <= 5; k++) { const v = x[i + k]; if (v !== undefined && !gap[i + k]) { const w = 1 / (1 + Math.abs(k)); s += v * w; c += w; } }
-    return c ? s / c : 0;
-  });
-
-  // 4) Phases
-  const out = new Array(N).fill('W');
-  for (let k = 0; k < bounds.length - 1; k++) {
-    const s0 = bounds[k], e0 = bounds[k + 1], len = e0 - s0;
-    const deepFrac = Math.max(0.05, 0.45 - 0.12 * k);
-    const remFrac = Math.min(0.4, 0.1 + 0.07 * k) * (len >= 45 ? 1 : 0.5);
-    for (let i = s0; i < e0; i++) {
-      if (wake[i]) continue;
-      const p = (i - s0) / len;
-      let st;
-      if (p < 0.1) st = 'L';
-      else if (p < 0.1 + deepFrac) st = act[i] < 0.12 ? 'D' : 'L';
-      else if (p < 1 - remFrac) st = 'L';
-      else st = act[i] < 0.4 ? 'R' : 'L';
-      // Première heure : pas de paradoxal (latence REM normale ~70-90 min)
-      if (st === 'R' && i - onset < 60) st = 'L';
-      out[i] = st;
-    }
-  }
+  // 4) Phases : modèle de Markov caché (HMM) + algorithme de Viterbi.
+  const out = hmmStages({ N, x, wake, gap, epochs, bounds, onset, ctx });
   // Mouvement bref (≤ 2 min) pendant le sommeil = changement de position / micro-éveil
   // → compté en sommeil léger, comme en polysomnographie où un éveil doit durer plus de la moitié de l'époque.
   const r = runs(out);
@@ -196,7 +172,174 @@ export function analyzeEpochs(epochs, seed) {
   if (N < 180) { pct -= 15; reasons.push('Nuit de moins de 3 h : estimation moins précise.'); }
   pct = Math.max(20, Math.min(95, pct));
   if (!reasons.length) reasons.push('Mesure complète et cohérente toute la nuit.');
-  return { stages, quality: { level: pct >= 80 ? 'élevée' : pct >= 55 ? 'moyenne' : 'faible', pct, reasons } };
+  // Confiance dans les phases : dépend surtout de la respiration captée
+  const resp = respiration(epochs, stages);
+  let phasePct = 45;
+  if (resp.coverage >= 0.8) phasePct = 75; else if (resp.coverage >= 0.5) phasePct = 65; else if (resp.coverage >= 0.2) phasePct = 55;
+  phasePct = Math.round(Math.min(phasePct, pct));
+  reasons.push(resp.coverage >= 0.5
+    ? `Respiration captée sur ${Math.round(resp.coverage * 100)} % du sommeil : phases affinées par la respiration.`
+    : 'Respiration peu captée (micro coupé ou iPhone loin de toi) : phases estimées surtout par les mouvements et le modèle des cycles.');
+  return { stages, quality: { level: pct >= 80 ? 'élevée' : pct >= 55 ? 'moyenne' : 'faible', pct, phasePct, reasons } };
+}
+
+// ---------------------------------------------------------------------------
+// MODÈLE DE MARKOV CACHÉ POUR LES PHASES
+// États : W (éveil), L (léger N1+N2), D (profond N3), R (paradoxal).
+// - Éveil/sommeil imposé par Cole-Kripke + Webster (méthode validée).
+// - Probabilités de transition minute par minute issues des hypnogrammes de
+//   référence, modulées par :
+//     • la pression de sommeil (Processus S de Borbély, 1982 ; décroissance
+//       exponentielle τ ≈ 4,2 h pendant le sommeil, montée τ ≈ 18,2 h à l'éveil)
+//       → plus de sommeil profond en début de nuit et après une longue journée ;
+//     • la position dans le cycle ultradien (~90 min, découpé sur tes mouvements) ;
+//     • la propension circadienne au paradoxal (maximale en fin de nuit) ;
+//     • la latence minimale du paradoxal (~60 min après l'endormissement).
+// - Observations : activité résiduelle + respiration (régularité, variabilité,
+//   rythme relatif). Le sommeil profond a la respiration la plus lente et la plus
+//   régulière ; le paradoxal une respiration plus rapide et irrégulière avec
+//   atonie musculaire (Douglas et al., Thorax 1982 ; Penzel et al., 2003).
+// ---------------------------------------------------------------------------
+const ST = ['W', 'L', 'D', 'R'];
+const LOG0 = -1e9;
+const lg = v => (v > 0 ? Math.log(v) : LOG0);
+const gauss = (v, mu, sd) => Math.exp(-((v - mu) ** 2) / (2 * sd * sd));
+
+function median(a) {
+  if (!a.length) return 0;
+  const s = [...a].sort((p, q) => p - q);
+  return s[Math.floor(s.length / 2)];
+}
+
+function hmmStages({ N, x, wake, gap, epochs, bounds, onset, ctx }) {
+  // Pression de sommeil initiale (Processus S)
+  const priorWakeH = Math.max(4, Math.min(24, ctx.priorWakeH ?? 16));
+  const S0 = (1 - Math.exp(-priorWakeH / 18.2)) / (1 - Math.exp(-16 / 18.2));
+  const startTs = ctx.startTs ?? Date.now();
+
+  // Position dans les cycles
+  const cycPos = new Array(N).fill(0);
+  for (let k = 0; k < bounds.length - 1; k++) {
+    const s0 = bounds[k], e0 = bounds[k + 1];
+    for (let i = s0; i < e0; i++) cycPos[i] = (i - s0) / Math.max(1, e0 - s0);
+  }
+
+  // Respiration : caractéristiques lissées sur ±3 min puis exprimées en rang (percentile)
+  // au sein de TA nuit → robuste aux différences de micro, de matelas et de position.
+  const has = epochs.map((e, i) => !!(e.br && e.rr >= 0.3 && x[i] < 1 && !wake[i] && !gap[i]));
+  const win = (i, f) => {
+    const v = [];
+    for (let k = Math.max(0, i - 3); k <= Math.min(N - 1, i + 3); k++) if (has[k]) v.push(f(k));
+    return v;
+  };
+  const feat = epochs.map((_, i) => {
+    if (!has[i]) return null;
+    const rr = win(i, k => epochs[k].rr);
+    const brs = win(i, k => epochs[k].br);
+    if (brs.length < 3) return null;
+    const mean = brs.reduce((p, q) => p + q, 0) / brs.length;
+    const sd = Math.sqrt(brs.reduce((p, q) => p + (q - mean) ** 2, 0) / brs.length);
+    return { reg: rr.reduce((p, q) => p + q, 0) / rr.length, cv: sd / mean, rate: mean };
+  });
+  const idx = feat.map((f, i) => (f ? i : -1)).filter(i => i >= 0);
+  const rank = key => {
+    const sorted = idx.map(i => feat[i][key]).sort((p, q) => p - q);
+    const out = {};
+    for (const i of idx) {
+      let lo = 0, hi = sorted.length;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] < feat[i][key]) lo = m + 1; else hi = m; }
+      out[i] = sorted.length > 1 ? lo / (sorted.length - 1) : 0.5;
+    }
+    return out;
+  };
+  const useBreath = idx.length >= 30;
+  const qReg = useBreath ? rank('reg') : {}, qCv = useBreath ? rank('cv') : {}, qRate = useBreath ? rank('rate') : {};
+  const BW = 0.7; // pondération de la respiration face au modèle physiologique
+
+  // Émissions (log)
+  const em = new Array(N);
+  for (let i = 0; i < N; i++) {
+    if (wake[i]) { em[i] = [0, LOG0, LOG0, LOG0]; continue; }
+    const e = [LOG0, 0, 0, 0];
+    if (!gap[i]) {
+      const xi = x[i];
+      e[1] += lg(9 * Math.exp(-9 * xi));
+      e[2] += lg(11 * Math.exp(-11 * xi));
+      e[3] += lg(10 * Math.exp(-10 * xi));
+      if (useBreath && feat[i]) {
+        const r = qReg[i], c = qCv[i], b = qRate[i];
+        // Profond : respiration la plus régulière, stable et lente de la nuit
+        e[2] += BW * (lg(gauss(r, 0.8, 0.25)) + lg(gauss(c, 0.2, 0.25)) + lg(gauss(b, 0.35, 0.3)));
+        // Léger : intermédiaire
+        e[1] += BW * (lg(gauss(r, 0.5, 0.3)) + lg(gauss(c, 0.5, 0.3)) + lg(gauss(b, 0.5, 0.3)));
+        // Paradoxal : respiration irrégulière et plus rapide
+        e[3] += BW * (lg(gauss(r, 0.2, 0.25)) + lg(gauss(c, 0.8, 0.25)) + lg(gauss(b, 0.7, 0.3)));
+      }
+    }
+    em[i] = e;
+  }
+
+  // Transitions dépendantes du temps
+  function trans(i) {
+    const t = Math.max(0, i - onset);
+    const p = cycPos[i];
+    const S = S0 * Math.exp(-t / 250);
+    const hour = new Date(startTs + i * 60000).getHours() + new Date(startTs + i * 60000).getMinutes() / 60;
+    const circ = 1 + 0.4 * Math.cos((2 * Math.PI * (hour - 6)) / 24);
+    const dF = S * (p >= 0.05 && p <= 0.55 ? 2 : 0.3);
+    const rF = (t < 55 ? 0.02 : 1) * circ * (p > 0.6 ? 2.5 : 0.25);
+    const T = [
+      [0, 0.2, 0.001 * dF, 0.002 * rF],            // depuis W
+      [0.01, 0, 0.02 * dF, 0.02 * rF],             // depuis L
+      [0.003, 0.045 * (p > 0.55 ? 2 : 1), 0, 0.0005], // depuis D
+      [0.015, 0.03 * (p < 0.2 ? 3 : 1), 0.0005, 0],  // depuis R
+    ];
+    for (let a = 0; a < 4; a++) {
+      let sum = 0;
+      for (let b = 0; b < 4; b++) if (a !== b) { T[a][b] = Math.min(T[a][b], 0.3); sum += T[a][b]; }
+      T[a][a] = Math.max(0.4, 1 - sum);
+    }
+    return T.map(r => r.map(lg));
+  }
+
+  // Viterbi
+  const V = [em[0].map((v, s) => v + (s === 0 ? 0 : lg(0.01)))];
+  const back = [[0, 0, 0, 0]];
+  for (let i = 1; i < N; i++) {
+    const T = trans(i);
+    const row = [], bk = [];
+    for (let b = 0; b < 4; b++) {
+      let best = -Infinity, arg = 0;
+      for (let a = 0; a < 4; a++) {
+        const v = V[i - 1][a] + T[a][b];
+        if (v > best) { best = v; arg = a; }
+      }
+      row.push(best + em[i][b]); bk.push(arg);
+    }
+    V.push(row); back.push(bk);
+  }
+  let s = V[N - 1].indexOf(Math.max(...V[N - 1]));
+  const out = new Array(N);
+  for (let i = N - 1; i >= 0; i--) { out[i] = ST[s]; s = back[i][s]; }
+  return out;
+}
+
+// Respiration et ronflement sur la nuit
+export function respiration(epochs, stages) {
+  const sleepIdx = [];
+  for (let i = 0; i < stages.length; i++) if (stages[i] !== 'W') sleepIdx.push(i);
+  const withBr = sleepIdx.filter(i => epochs[i]?.br && epochs[i].rr >= 0.3);
+  const sa = epochs.map(e => e?.sa).filter(v => v != null);
+  const saMed = median(sa);
+  const snore = sleepIdx.filter(i => {
+    const e = epochs[i];
+    return e && e.sr >= 0.45 && e.sa > Math.max(0.1, saMed + 0.08);
+  }).length;
+  return {
+    bpm: withBr.length ? Math.round(median(withBr.map(i => epochs[i].br)) * 10) / 10 : null,
+    coverage: sleepIdx.length ? withBr.length / sleepIdx.length : 0,
+    snoreMin: sa.length ? snore : null,
+  };
 }
 
 // Compatibilité : ancienne signature
@@ -264,19 +407,23 @@ export function scoreLabel(score) {
 }
 
 // Construit l'objet "nuit" complet
-export function buildNight({ id, start, end, epochs = [], events = [], source, seed }, goalMin) {
+export function buildNight({ id, start, end, epochs = [], events = [], source, seed, prevEnd }, goalMin) {
   const minutes = Math.max(1, Math.round((end - start) / 60000));
   let stages, quality;
+  // Heures d'éveil avant le coucher (pression de sommeil), si la nuit précédente est connue
+  const priorWakeH = prevEnd && start - prevEnd > 2 * 3600e3 && start - prevEnd < 30 * 3600e3 ? (start - prevEnd) / 3600e3 : undefined;
   if (source === 'capteurs' && epochs.length) {
-    ({ stages, quality } = analyzeEpochs(epochs, seed || id));
+    ({ stages, quality } = analyzeEpochs(epochs, seed || id, { priorWakeH, startTs: start }));
   } else {
     stages = modelStages(minutes, seed || id);
     quality = { level: 'estimation', pct: null, reasons: [source === 'manuel' ? 'Nuit saisie à la main : durée exacte, phases estimées par le modèle des cycles.' : 'Aucun capteur disponible : phases estimées par le modèle des cycles.'] };
   }
   const sum = summarize(stages);
+  const resp = source === 'capteurs' && epochs.length ? respiration(epochs, stages) : null;
   return {
-    id, start, end, source, stages, events, quality,
-    epochs: epochs.map(e => [Math.round((e.m || 0) * 1000) / 1000, Math.round((e.n || 0) * 1000) / 1000, e.c || 0, e.g ? 1 : 0]),
+    id, start, end, source, stages, events, quality, resp,
+    // Données brutes compactes : [mouvement, son, counts, trou, respirations/min, régularité]
+    epochs: epochs.map(e => [Math.round((e.m || 0) * 1000) / 1000, Math.round((e.n || 0) * 1000) / 1000, e.c || 0, e.g ? 1 : 0, e.br || 0, e.rr || 0]),
     summary: sum,
     score: computeScore(sum, goalMin),
     mood: null, tags: [], note: '',
@@ -337,4 +484,73 @@ export function bedtimesFor(wakeMin, fallAsleep = 15) {
 }
 export function wakeTimesFrom(nowMin, fallAsleep = 15) {
   return [4, 5, 6].map(c => ({ cycles: c, min: nowMin + fallAsleep + c * CYCLE, sleep: c * CYCLE }));
+}
+
+// ---------------------------------------------------------------------------
+// RÉGULARITÉ ET CHRONOTYPE
+// ---------------------------------------------------------------------------
+function sleepBounds(n) {
+  const first = n.stages.search(/[LDR]/);
+  const last = Math.max(n.stages.lastIndexOf('L'), n.stages.lastIndexOf('D'), n.stages.lastIndexOf('R'));
+  if (first < 0) return null;
+  return { on: n.start + first * 60000, off: n.start + (last + 1) * 60000 };
+}
+
+// Sleep Regularity Index (Phillips et al., Sci Rep 2017) : probabilité d'être dans le même
+// état (endormi/éveillé) à 24 h d'intervalle, de -100 à 100. Calculé sur les nuits consécutives.
+export function sleepRegularityIndex(nights) {
+  const byKey = {};
+  for (const n of nights) byKey[nightKeyOf(n.start)] = n;
+  const keys = Object.keys(byKey).sort();
+  let same = 0, total = 0, pairs = 0;
+  for (const k of keys) {
+    const d = new Date(k + 'T12:00:00');
+    const next = new Date(d.getTime() + 86400e3);
+    const k2 = nightKeyOf(next.getTime() + 12 * 3600e3);
+    const a = byKey[k], b = byKey[k2];
+    if (!b) continue;
+    pairs++;
+    const t0 = d.getTime();
+    for (let m = 0; m < 1440; m++) {
+      const ta = t0 + m * 60000, tb = ta + 86400e3;
+      if (asleepAt(a, ta) === asleepAt(b, tb)) same++;
+      total++;
+    }
+  }
+  if (pairs < 3) return null;
+  return { sri: Math.round(200 * same / total - 100), pairs };
+}
+function asleepAt(n, t) {
+  if (t < n.start || t >= n.end) return false;
+  return n.stages[Math.floor((t - n.start) / 60000)] !== 'W';
+}
+function nightKeyOf(ts) {
+  const d = new Date(ts - 12 * 3600e3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Chronotype (Munich ChronoType Questionnaire, Roenneberg et al. 2004/2012) :
+// milieu du sommeil les jours libres corrigé de la dette (MSFsc) + jet-lag social.
+export function chronotype(nights) {
+  const work = [], free = [];
+  for (const n of nights) {
+    const b = sleepBounds(n);
+    if (!b) continue;
+    const day = new Date(n.start - 12 * 3600e3).getDay(); // jour du coucher
+    const mid = (b.on + b.off) / 2;
+    const d = new Date(mid);
+    let midH = d.getHours() + d.getMinutes() / 60;
+    if (midH > 14) midH -= 24;
+    const dur = (b.off - b.on) / 3600e3;
+    (day === 5 || day === 6 ? free : work).push({ midH, dur });
+  }
+  if (work.length < 2 || free.length < 1) return null;
+  const avg = (a, f) => a.reduce((s, v) => s + f(v), 0) / a.length;
+  const MSW = avg(work, v => v.midH), MSF = avg(free, v => v.midH);
+  const SDw = avg(work, v => v.dur), SDf = avg(free, v => v.dur);
+  const SDweek = (5 * SDw + 2 * SDf) / 7;
+  const MSFsc = SDf > SDw ? MSF - (SDf - SDweek) / 2 : MSF;
+  const jetlag = Math.abs(MSF - MSW);
+  const type = MSFsc < 3 ? '🐦 Matinal' : MSFsc < 4 ? 'Plutôt matinal' : MSFsc < 5 ? 'Intermédiaire' : MSFsc < 6 ? 'Plutôt tardif' : '🦉 Tardif';
+  return { MSW, MSF, MSFsc, jetlag, type, nWork: work.length, nFree: free.length };
 }

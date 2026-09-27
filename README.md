@@ -54,7 +54,14 @@ Utiliser `somnia-hostinger.zip` (instructions dans `LISEZ-MOI.txt` à l'intérie
   Calibré pour qu'un simple retournement ne compte pas comme un réveil.
 - **Endormissement** : premier bloc de 10 min de sommeil continu. **Réveils** : éveils de 3 min ou plus.
 - **Cycles** : découpés sur tes propres mouvements (70-120 min) plutôt que sur une durée fixe.
-- **Phases profond / léger / paradoxal** : estimation (aucun téléphone ne peut les mesurer sans capteur cardiaque/cérébral).
+- **Respiration** : rythme et régularité respiratoires mesurés chaque minute par autocorrélation, à partir du micro
+  (bande 150-1500 Hz) et des micro-vibrations du matelas (accéléromètre à 4 Hz). Ronflements détectés.
+- **Phases profond / léger / paradoxal** : modèle de Markov caché (Viterbi) combinant mouvements, respiration
+  (rangs au sein de ta nuit), pression de sommeil (Processus S de Borbély), position dans le cycle ultradien,
+  propension circadienne au paradoxal et latence minimale du paradoxal. Cela reste une estimation : sans EEG,
+  aucune app ne mesure les phases directement.
+- **Rythme circadien** : Sleep Regularity Index (Phillips 2017), chronotype MCTQ et jet-lag social (Roenneberg).
+- **Tests cliniques validés** : ISI (insomnie), Epworth (somnolence), rMEQ (chronotype), STOP-BANG (apnée).
 - **Indice de fiabilité** par nuit : détecte les coupures de mesure (app en pause), un iPhone posé ailleurs que sur le matelas, les nuits trop courtes.
 - Le **score** repose surtout sur les données mesurées (durée, efficacité, endormissement, éveils) ; les phases estimées ne pèsent que 10 points.
 

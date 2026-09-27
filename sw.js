@@ -1,5 +1,5 @@
 // Service worker : l'app fonctionne hors ligne (sauf les données en temps réel).
-const VERSION = 'somnia-v1.1.0';
+const VERSION = 'somnia-v1.2.0';
 const SHELL = [
   './',
   'index.html',
@@ -11,6 +11,8 @@ const SHELL = [
   'js/tracker.js',
   'js/sounds.js',
   'js/science.js',
+  'js/signal.js',
+  'js/tests.js',
   'manifest.webmanifest',
   'icons/apple-touch-icon.png',
   'icons/icon-192.png',

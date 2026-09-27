@@ -1,9 +1,10 @@
 import { store, uid, fmtDur, fmtTime, fmtDate, fmtShortDate, esc, pad, timeToMinutes, minutesToTime, nightKey } from './store.js';
-import { STAGES, buildNight, scoreLabel, statsFor, tagImpact, bedtimesFor, wakeTimesFrom } from './analysis.js';
+import { STAGES, buildNight, scoreLabel, statsFor, tagImpact, bedtimesFor, wakeTimesFrom, sleepRegularityIndex, chronotype } from './analysis.js';
 import { hypnogram, miniHypno, phaseBar, legend, scoreRing, durationBars, lineChart, scheduleChart } from './charts.js';
 import { tracker, wakeLockActive } from './tracker.js';
 import * as snd from './sounds.js';
 import * as sci from './science.js';
+import { TESTS } from './tests.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -268,7 +269,7 @@ function finishNight() {
     return;
   }
   const hasSensors = raw.motionUsed || raw.sensors.motion || raw.epochs.some(e => e.c || e.m);
-  const night = buildNight({ id: raw.id, start: raw.start, end: raw.end, epochs: raw.epochs, events: raw.events, source: hasSensors ? 'capteurs' : 'estimation' }, store.settings.goalMin);
+  const night = buildNight({ id: raw.id, start: raw.start, end: raw.end, epochs: raw.epochs, events: raw.events, source: hasSensors ? 'capteurs' : 'estimation', prevEnd: prevEndBefore(raw.start) }, store.settings.goalMin);
   store.addNight(night);
   go('nuit');
   openMorning(night.id);
@@ -297,6 +298,7 @@ function openMorning(id) {
       <div class="stat center"><div class="v" style="font-size:18px">${Math.round(n.summary.efficiency * 100)} %</div><div class="l">Efficacité</div></div>
       <div class="stat center"><div class="v" style="font-size:18px">${n.summary.awakenings}</div><div class="l">Réveils</div></div>
     </div>
+    ${respBlock(n)}
     ${qualityBlock(n)}
     <div class="section-title">Comment te sens-tu ?</div>
     <div class="row between" id="moods">${MOODS.map((m, i) => `<button class="chip" data-v="${i + 1}" style="font-size:26px;padding:8px 12px">${m}</button>`).join('')}</div>
@@ -307,12 +309,30 @@ function openMorning(id) {
   `, root => bindNightEdit(root, n, () => { closeSheet(); go(tab); toast('Nuit enregistrée ✅'); }));
 }
 
+function prevEndBefore(ts) {
+  const prev = store.nights.find(x => x.end <= ts);
+  return prev ? prev.end : undefined;
+}
+
+function respBlock(n) {
+  const r = n.resp;
+  if (!r) return '';
+  return `<div class="grid2" style="margin-top:10px">
+    <div class="stat"><div class="v" style="font-size:18px">${r.bpm ? r.bpm.toFixed(1).replace('.', ',') + ' /min' : '—'}</div><div class="l">Respiration pendant le sommeil (normal : 12-20)</div></div>
+    <div class="stat"><div class="v" style="font-size:18px">${r.snoreMin == null ? '—' : fmtDur(r.snoreMin)}</div><div class="l">Ronflements détectés</div></div>
+  </div>
+  ${r.snoreMin > 60 ? '<p class="muted small">Ronflements fréquents : fais le test STOP-BANG (onglet Science). En cas de pauses respiratoires ou de fatigue en journée, parles-en à un médecin.</p>' : ''}
+  ${r.bpm && (r.bpm < 8 || r.bpm > 24) ? '<p class="muted small">Rythme respiratoire inhabituel : la mesure peut être perturbée (ventilateur, partenaire, animal). Si cela se répète, demande un avis médical.</p>' : ''}`;
+}
+
 function qualityBlock(n) {
   const q = n.quality;
   if (!q) return '';
   const cls = { 'élevée': 'good', moyenne: 'warn', faible: 'bad', estimation: 'warn' }[q.level] || 'warn';
   return `<div class="card" style="background:var(--card);margin-top:12px">
     <div class="row between"><b>🎯 Fiabilité de la mesure</b><span class="pill ${cls}">${q.level === 'estimation' ? 'Estimation' : q.level[0].toUpperCase() + q.level.slice(1)}${q.pct ? ' · ' + q.pct + ' %' : ''}</span></div>
+    ${q.phasePct ? `<div class="row between small" style="margin-top:8px"><span>Éveil / sommeil</span><b>${q.pct} %</b></div>
+    <div class="row between small"><span>Phases (profond, léger, paradoxal)</span><b>${q.phasePct} %</b></div>` : ''}
     ${q.reasons.map(r => `<p class="muted small" style="margin:6px 0 0">• ${esc(r)}</p>`).join('')}
   </div>`;
 }
@@ -352,7 +372,7 @@ function openManualNight() {
       const end = new Date($('#mn-end', root).value).getTime();
       if (!start || !end || end <= start) return toast('Vérifie les horaires');
       if (end - start > 20 * 3600e3) return toast('Durée supérieure à 20 h ?');
-      const night = buildNight({ id: uid(), start, end, source: 'manuel' }, store.settings.goalMin);
+      const night = buildNight({ id: uid(), start, end, source: 'manuel', prevEnd: prevEndBefore(start) }, store.settings.goalMin);
       store.addNight(night);
       openMorning(night.id);
     });
@@ -423,6 +443,7 @@ function openNightDetail(id) {
       <div class="stat"><div class="v">${s.awakenings}</div><div class="l">Réveils (≥ 3 min)</div></div>
       <div class="stat"><div class="v">${fmtDur(s.waso ?? 0)}</div><div class="l">Éveil nocturne total</div></div>
     </div>
+    ${respBlock(n)}
     ${qualityBlock(n)}
     <div class="card" style="margin-top:12px;background:var(--card)">
       ${[['D', s.deep], ['L', s.light], ['R', s.rem], ['W', s.awake]].map(([k, v]) => `
@@ -505,6 +526,8 @@ function renderAnalyses() {
       ${scheduleChart(st.list.slice(-14))}
     </div>
 
+    ${circadianCard(st.list)}
+
     <div class="card">
       <h2>Phases moyennes</h2>
       ${phaseBar(phaseSum)}
@@ -530,6 +553,26 @@ function renderAnalyses() {
   `;
   bindSeg();
 }
+function circadianCard(list) {
+  const sri = sleepRegularityIndex(list);
+  const ch = chronotype(list);
+  const h = v => minutesToTime(v * 60);
+  const sriCls = sri ? (sri.sri >= 85 ? 'good' : sri.sri >= 70 ? 'warn' : 'bad') : '';
+  return `<div class="card">
+    <h2>🧬 Rythme circadien</h2>
+    <div class="row between"><b class="small">Indice de régularité (SRI)</b>${sri ? `<span class="pill ${sriCls}">${sri.sri} / 100</span>` : '<span class="muted small">3 nuits consécutives min.</span>'}</div>
+    <p class="muted small">Probabilité d'être dans le même état (endormi/éveillé) à 24 h d'intervalle (Phillips et al., 2017). Un SRI élevé est associé à une mortalité plus faible, indépendamment de la durée de sommeil (Windred et al., Sleep 2024). Objectif : 85 ou plus.</p>
+    <div class="spacer"></div>
+    <div class="row between"><b class="small">Chronotype (méthode MCTQ)</b>${ch ? `<span class="pill good">${ch.type}</span>` : '<span class="muted small">Il faut des nuits en semaine et le week-end</span>'}</div>
+    ${ch ? `<div class="grid3" style="margin-top:8px">
+      <div class="stat center"><div class="v" style="font-size:17px">${h(ch.MSFsc)}</div><div class="l">Milieu de sommeil naturel</div></div>
+      <div class="stat center"><div class="v" style="font-size:17px">${h(ch.MSW)}</div><div class="l">Milieu en semaine</div></div>
+      <div class="stat center"><div class="v" style="font-size:17px;color:${ch.jetlag > 1 ? 'var(--warn)' : 'var(--good)'}">${fmtDur(ch.jetlag * 60)}</div><div class="l">Jet-lag social</div></div>
+    </div>
+    <p class="muted small">${ch.jetlag > 1 ? 'Plus d\'1 h d\'écart entre semaine et week-end : c\'est comme changer de fuseau horaire chaque week-end (Roenneberg et al., 2012). Rapproche tes horaires du week-end de ceux de la semaine.' : 'Tes horaires de semaine et de week-end sont bien alignés.'}</p>` : ''}
+  </div>`;
+}
+
 function bindSeg() {
   $$('#seg button').forEach(b => b.addEventListener('click', () => { period = +b.dataset.v; renderAnalyses(); }));
 }
@@ -690,6 +733,20 @@ function renderScience() {
     </div>
 
     <div class="card">
+      <h2>🩺 Tests cliniques validés</h2>
+      <p class="muted small">Les questionnaires utilisés par les médecins du sommeil. Refais-les tous les 1 à 3 mois pour suivre ton évolution.</p>
+      ${TESTS.map(t => {
+        const r = (s.tests || {})[t.id];
+        const it = r ? t.interpret(r.score, r.answers) : null;
+        return `<div class="list-item" data-test="${t.id}" style="cursor:pointer">
+          <div style="font-size:24px">${t.ico}</div>
+          <div style="flex:1"><b>${t.short}</b><div class="muted tiny">${r ? `${r.score}/${t.max} · ${new Date(r.date).toLocaleDateString('fr-FR')}` : 'Pas encore fait · 1 min'}</div></div>
+          ${it ? `<span class="pill ${it.cls}" style="max-width:45%;text-align:right">${it.txt}</span>` : '<span class="muted">›</span>'}
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="card">
       <h2>📏 Combien dormir ?</h2>
       <p class="muted small">Recommandations de la National Sleep Foundation (Hirshkowitz et al., 2015). Ton âge : ${s.age} ans.</p>
       <table class="reco">${sci.RECO.slice(4).map(r => `<tr class="${r === reco ? 'me' : ''}"><td>${r.label}</td><td style="text-align:right">${r.range}</td></tr>`).join('')}</table>
@@ -709,6 +766,7 @@ function renderScience() {
 
     <p class="muted tiny center">Somnia n'est pas un dispositif médical. En cas de ronflements forts, de pauses respiratoires ou de fatigue persistante, consulte un médecin.</p>
   `;
+  $$('[data-test]').forEach(el => el.addEventListener('click', () => openTest(el.dataset.test)));
   $$('#topics .chip').forEach(b => b.addEventListener('click', () => {
     studyTopic = b.dataset.t;
     $$('#topics .chip').forEach(x => x.classList.toggle('on', x === b));
@@ -716,6 +774,42 @@ function renderScience() {
   }));
   loadEnv();
   loadStudies();
+}
+
+function openTest(id) {
+  const t = TESTS.find(x => x.id === id);
+  const answers = new Array(t.questions.length).fill(null);
+  openSheet(`
+    <h2>${t.ico} ${esc(t.name)}</h2>
+    <p class="muted small">${esc(t.intro)}</p>
+    ${t.questions.map((q, i) => `
+      <div class="card" style="background:var(--card);padding:12px">
+        <div class="small" style="font-weight:700;margin-bottom:8px">${i + 1}. ${esc(q.q)}</div>
+        <div data-q="${i}">${q.o.map((o, j) => `<button class="chip" data-a="${j}" style="font-size:13px">${esc(o)}</button>`).join('')}</div>
+      </div>`).join('')}
+    <div id="t-result"></div>
+    <button class="btn primary block" id="t-go" disabled>Voir mon résultat</button>
+    <p class="muted tiny" style="margin-top:10px">Référence : ${esc(t.ref)}. Outil de dépistage, pas un diagnostic.</p>
+  `, root => {
+    $$('[data-q]', root).forEach(g => $$('.chip', g).forEach(b => b.addEventListener('click', () => {
+      answers[+g.dataset.q] = +b.dataset.a;
+      $$('.chip', g).forEach(x => x.classList.toggle('on', x === b));
+      $('#t-go', root).disabled = answers.includes(null);
+    })));
+    $('#t-go', root).addEventListener('click', () => {
+      const score = t.score(answers, t);
+      const it = t.interpret(score, answers);
+      store.setSettings({ tests: { ...(store.settings.tests || {}), [t.id]: { score, answers, date: Date.now() } } });
+      $('#t-result', root).innerHTML = `<div class="card" style="border-color:var(--accent)">
+        <div class="row between"><b>Score : ${score} / ${t.max}</b><span class="pill ${it.cls}">${esc(it.txt)}</span></div>
+        ${it.advice ? `<p class="small">${esc(it.advice)}</p>` : ''}
+      </div>`;
+      const b = $('#t-go', root);
+      b.textContent = 'Terminé';
+      b.onclick = () => { closeSheet(); go('science'); };
+      $('#t-result', root).scrollIntoView({ behavior: 'smooth' });
+    }, { once: true });
+  });
 }
 
 async function loadEnv() {
@@ -815,7 +909,7 @@ function openSettings() {
     <button class="btn danger block" id="reset">Tout effacer</button>
 
     <div class="section-title">À propos</div>
-    <p class="muted small">Somnia v1.1 · Application web installable (PWA). Éveil/sommeil calculés par l'algorithme d'actigraphie de Cole-Kripke avec les règles de Webster (méthodes validées face à la polysomnographie). Les phases profond/léger/paradoxal sont une estimation, comme dans toutes les applis sans montre : ce n'est pas un avis médical.</p>
+    <p class="muted small">Somnia v1.2 · Application web installable (PWA). Éveil/sommeil : actigraphie Cole-Kripke + règles de Webster (validées face à la polysomnographie). Phases : modèle de Markov caché combinant mouvements, respiration (micro + vibrations du matelas), pression de sommeil (Borbély) et rythme circadien. Les phases restent une estimation (aucune app sans capteur cérébral ne les mesure directement). Pas un avis médical.</p>
     <button class="btn primary block" id="s-close">Terminé</button>
   `, root => {
     const goal = $('#goal', root);
