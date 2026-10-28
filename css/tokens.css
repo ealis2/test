@@ -1,0 +1,116 @@
+/* Somnia — jetons du système de design « Observatoire ».
+   Toute couleur de l'interface passe par ces variables sémantiques. */
+
+@font-face { font-family: 'Fraunces'; src: url(../fonts/fraunces-opsz.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: 'Instrument Sans'; src: url(../fonts/instrument-sans.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: 'Plex Mono'; src: url(../fonts/plex-mono-400.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Plex Mono'; src: url(../fonts/plex-mono-500.woff2) format('woff2'); font-weight: 500; font-display: swap; }
+
+:root {
+  /* Thème Nuit (par défaut) */
+  --bg-0: #070912;
+  --bg-1: #0a0e1b;
+  --surface-1: #0f1427;
+  --surface-2: #151c33;
+  --surface-3: #1d2641;
+  --glass: rgba(15, 20, 39, .72);
+  --line: rgba(196, 206, 255, .10);
+  --line-strong: rgba(196, 206, 255, .20);
+
+  --fg-1: #eef0f7;   /* texte principal — 16,9:1 sur surface-1 */
+  --fg-2: #aab1c8;   /* texte secondaire — 8,6:1 */
+  --fg-3: #858ea9;   /* texte tertiaire — 5,4:1 */
+
+  /* Sémantique des données : la nuit est froide, le matin est chaud */
+  --moon: #9db7ff;        /* sommeil */
+  --moon-soft: rgba(157, 183, 255, .16);
+  --bed: #4d5d8f;         /* temps au lit (hors sommeil) */
+  --dusk: #c3a8ff;        /* coucher */
+  --dawn: #f2b66d;        /* réveil, lever — et couleur d'action */
+  --dawn-soft: rgba(242, 182, 109, .14);
+  --nap: #d9b8ff;
+
+  --accent: var(--dawn);
+  --on-accent: #1b1206;
+  --positive: #8fd3b6;
+  --attention: #f2a08c;
+  --neutral: var(--fg-2);
+  --focus: #ffd59a;
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 12px 32px -18px rgba(0, 0, 0, .8);
+  --horizon: radial-gradient(130% 55% at 50% 115%, rgba(242, 182, 109, .16) 0%, rgba(77, 93, 143, .10) 38%, transparent 70%);
+
+  /* Typographie */
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --font-ui: 'Instrument Sans', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --fs-micro: .75rem;   /* 12 */
+  --fs-small: .875rem;  /* 14 */
+  --fs-body: 1rem;      /* 16 */
+  --fs-lead: 1.125rem;  /* 18 */
+  --fs-title: 1.375rem; /* 22 */
+  --fs-h1: 1.875rem;    /* 30 */
+  --fs-display: 3.25rem;/* 52 */
+  --fs-hero: 4.25rem;   /* 68 */
+
+  /* Espacements (base 4) */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px; --s-14: 56px;
+  --gutter: 16px;
+
+  /* Rayons */
+  --r-1: 8px; --r-2: 14px; --r-3: 22px; --r-pill: 999px;
+
+  /* Mouvement */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-inout: cubic-bezier(.65, 0, .35, 1);
+  --t-fast: 140ms; --t-med: 260ms; --t-slow: 600ms;
+
+  --tabbar-h: 64px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+
+/* Thème Aube (clair) : papier chaud, encres foncées. Contrastes ≥ 4,5:1. */
+:root[data-theme="dawn"] {
+  --bg-0: #f4efe6;
+  --bg-1: #f8f4ec;
+  --surface-1: #fffdf8;
+  --surface-2: #f1ebe0;
+  --surface-3: #e7dfd1;
+  --glass: rgba(255, 253, 248, .82);
+  --line: rgba(40, 44, 66, .12);
+  --line-strong: rgba(40, 44, 66, .24);
+  --fg-1: #191b26;
+  --fg-2: #474c60;
+  --fg-3: #636a80;
+  --moon: #3552b8;
+  --moon-soft: rgba(53, 82, 184, .12);
+  --bed: #9aa6cf;
+  --dusk: #6f43c9;
+  --dawn: #95510f;
+  --dawn-soft: rgba(149, 81, 15, .12);
+  --nap: #8a4fd0;
+  --accent: #95510f;
+  --on-accent: #ffffff;
+  --positive: #17694a;
+  --attention: #b2462d;
+  --focus: #95510f;
+  --shadow-1: 0 1px 2px rgba(40, 44, 66, .06), 0 10px 30px -20px rgba(40, 44, 66, .4);
+  --horizon: radial-gradient(130% 55% at 50% 115%, rgba(242, 182, 109, .28) 0%, transparent 65%);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --bg-0: #f4efe6; --bg-1: #f8f4ec; --surface-1: #fffdf8; --surface-2: #f1ebe0; --surface-3: #e7dfd1;
+    --glass: rgba(255, 253, 248, .82); --line: rgba(40, 44, 66, .12); --line-strong: rgba(40, 44, 66, .24);
+    --fg-1: #191b26; --fg-2: #474c60; --fg-3: #636a80;
+    --moon: #3552b8; --moon-soft: rgba(53, 82, 184, .12); --bed: #9aa6cf; --dusk: #6f43c9; --dawn: #95510f; --dawn-soft: rgba(149, 81, 15, .12); --nap: #8a4fd0;
+    --accent: #95510f; --on-accent: #fff; --positive: #17694a; --attention: #b2462d; --focus: #95510f;
+    --shadow-1: 0 1px 2px rgba(40, 44, 66, .06), 0 10px 30px -20px rgba(40, 44, 66, .4);
+    --horizon: radial-gradient(130% 55% at 50% 115%, rgba(242, 182, 109, .28) 0%, transparent 65%);
+    color-scheme: light;
+  }
+}
+
+@media (min-width: 720px) { :root { --gutter: 28px; } }

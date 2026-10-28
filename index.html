@@ -1,76 +1,64 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="night">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <title>Somnia – Suivi du sommeil</title>
-  <meta property="og:title" content="Somnia – Suivi du sommeil">
-  <meta property="og:description" content="Suivi du sommeil, réveil intelligent et analyses scientifiques. Gratuit, sans App Store.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Somnia — journal et analyse du sommeil</title>
+  <meta name="description" content="Somnia : journal du sommeil, réveil, statistiques détaillées et repères scientifiques sourcés. Vos données restent sur votre appareil.">
+  <meta name="theme-color" content="#070912">
+  <meta name="color-scheme" content="dark light">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
+  <meta property="og:title" content="Somnia — journal et analyse du sommeil">
+  <meta property="og:description" content="Un journal du sommeil élégant, des statistiques honnêtes, des sources vérifiables.">
   <meta property="og:image" content="icons/icon-512.png">
-  <meta name="description" content="Somnia : suivi du sommeil, réveil intelligent, sons relaxants et données scientifiques en temps réel.">
-  <meta name="theme-color" content="#0b1026">
-  <meta name="color-scheme" content="dark">
 
-  <!-- iPhone : installation sur l'écran d'accueil (PWA) -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Somnia">
   <meta name="format-detection" content="telephone=no">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <!-- Écrans de démarrage iPhone -->
   <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="icons/splash-1179x2556.jpg">
   <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" href="icons/splash-1290x2796.jpg">
   <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="icons/splash-1170x2532.jpg">
   <link rel="apple-touch-startup-image" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" href="icons/splash-1125x2436.jpg">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="preload" href="fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/fraunces-opsz.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/screens.css">
 </head>
 <body>
-  <div id="app">
+  <a class="sr-only" href="#view">Aller au contenu</a>
+  <div class="app" id="app">
     <header class="topbar">
-      <h1 id="page-title">Nuit</h1>
-      <button class="icon-btn" id="btn-settings" aria-label="Réglages">
-        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm7.4-2.5a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"/></svg>
-      </button>
+      <a class="brand" href="#/home" aria-label="Somnia, accueil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="9.2" opacity=".35"/><path d="M15.8 15.6A6 6 0 1 1 9.2 6.9a4.8 4.8 0 0 0 6.6 8.7Z"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg>
+        <span>Somnia</span>
+      </a>
+      <span class="spacer"></span>
+      <a class="icon-btn" href="#/alarms" aria-label="Réveils et routines"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 9.5V13l2.3 1.6M4.5 5.5 7 3.5M19.5 5.5 17 3.5"/></svg></a>
+      <a class="icon-btn" href="#/settings" aria-label="Réglages et données"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l2-1.5-2-3.5-2.4 1a7.5 7.5 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.5 7.5 0 0 0 7 6.5l-2.4-1-2 3.5 2 1.5a7.7 7.7 0 0 0 0 3l-2 1.5 2 3.5 2.4-1a7.5 7.5 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.5 7.5 0 0 0 2.6-1.5l2.4 1 2-3.5Z"/></svg></a>
     </header>
 
-    <main id="view"></main>
+    <nav class="tabbar" id="tabbar" aria-label="Navigation principale"></nav>
 
-    <nav class="tabbar" id="tabbar">
-      <button data-tab="nuit" class="active">
-        <svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
-        <span>Nuit</span>
-      </button>
-      <button data-tab="journal">
-        <svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg>
-        <span>Journal</span>
-      </button>
-      <button data-tab="analyses">
-        <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-        <span>Analyses</span>
-      </button>
-      <button data-tab="detente">
-        <svg viewBox="0 0 24 24"><path d="M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm11-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
-        <span>Détente</span>
-      </button>
-      <button data-tab="science">
-        <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3M7.5 14h9"/></svg>
-        <span>Science</span>
-      </button>
-    </nav>
+    <main class="view" id="view" tabindex="-1">
+      <div class="boot" role="status">
+        <p class="eyebrow">Somnia</p>
+        <p class="muted">Chargement…</p>
+        <noscript><p>Somnia a besoin de JavaScript pour fonctionner.</p></noscript>
+      </div>
+    </main>
   </div>
 
-  <!-- Feuille modale (réglages, détails, fin de nuit) -->
-  <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
-  <section class="sheet" id="sheet" hidden aria-modal="true" role="dialog">
-    <div class="sheet-grab"></div>
-    <div id="sheet-content"></div>
-  </section>
+  <div id="overlay-root"></div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 
-  <div class="toast" id="toast" hidden></div>
-
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -1,50 +1,59 @@
-# Somnia – configuration Apache/LiteSpeed pour Hostinger
+# Somnia — configuration Apache / LiteSpeed pour Hostinger.
 # Fonctionne à la racine (https://cryptologist.pro/) comme dans un sous-dossier
-# (https://cryptologist.pro/sommeil/).
+# (https://cryptologist.pro/sommeil/) : tous les chemins de l'app sont relatifs.
 
 Options -Indexes
 DirectoryIndex index.html
 
-# HTTPS obligatoire (capteurs, micro, géolocalisation et PWA l'exigent sur iPhone)
 <IfModule mod_rewrite.c>
   RewriteEngine On
+  # HTTPS obligatoire (PWA, notifications, service worker)
   RewriteCond %{HTTPS} off
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  # Fichiers de développement jamais servis
+  RewriteRule (^|/)(\.git|tests|scripts|node_modules|docs/research)(/|$) - [F,L]
+  RewriteRule (^|/)api/(data|lib)(/|$) - [F,L]
+  RewriteRule (^|/)(package(-lock)?\.json|README\.md|\.gitignore|config\.local\.php)$ - [F,L]
 </IfModule>
 
-# Types MIME
 <IfModule mod_mime.c>
   AddType application/manifest+json .webmanifest
   AddType text/javascript .js .mjs
   AddType image/svg+xml .svg
-  AddCharset utf-8 .html .css .js .webmanifest .json
+  AddType font/woff2 .woff2
+  AddType text/calendar .ics
+  AddCharset utf-8 .html .css .js .webmanifest .json .md
 </IfModule>
 
-# Compression
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml text/calendar
 </IfModule>
 
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Permissions-Policy "microphone=(self), geolocation=(self), accelerometer=(self), gyroscope=(self), screen-wake-lock=(self)"
+  Header always set X-Frame-Options "DENY"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), screen-wake-lock=(self)"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; media-src 'self' blob: data:; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'"
 
-  # Le service worker et la page doivent toujours être frais (mises à jour immédiates)
-  <FilesMatch "^(sw\.js|index\.html|manifest\.webmanifest)$">
-    Header set Cache-Control "no-cache, must-revalidate"
+  # Page, service worker et manifeste toujours revalidés : les mises à jour arrivent vite.
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache"
   </FilesMatch>
-  <FilesMatch "\.(css|js|png|svg)$">
-    Header set Cache-Control "public, max-age=86400"
+  <FilesMatch "\.(css|js)$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
+  <FilesMatch "\.(woff2|png|jpg|svg)$">
+    Header set Cache-Control "public, max-age=2592000"
   </FilesMatch>
   <FilesMatch "^sw\.js$">
-    Header set Cache-Control "no-cache, must-revalidate"
+    Header set Cache-Control "no-cache"
+    Header set Service-Worker-Allowed "./"
   </FilesMatch>
 </IfModule>
 
-# Ne jamais exposer les fichiers techniques
-<FilesMatch "^(\.git.*|README\.md|.*\.json\.cache)$">
+<FilesMatch "^\.">
   Require all denied
 </FilesMatch>
-RedirectMatch 404 /\.git

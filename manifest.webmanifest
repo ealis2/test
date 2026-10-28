@@ -1,19 +1,26 @@
 {
-  "name": "Somnia – Suivi du sommeil",
+  "name": "Somnia — journal et analyse du sommeil",
   "short_name": "Somnia",
-  "description": "Suivi du sommeil, réveil intelligent, sons relaxants et données scientifiques en temps réel.",
+  "description": "Journal du sommeil, réveil, statistiques détaillées et repères scientifiques sourcés. Données stockées sur l'appareil.",
   "lang": "fr",
+  "dir": "ltr",
   "id": "./",
-  "start_url": "./",
+  "start_url": "./#/home",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b1026",
-  "theme_color": "#0b1026",
+  "background_color": "#070912",
+  "theme_color": "#070912",
   "categories": ["health", "lifestyle"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ],
+  "shortcuts": [
+    { "name": "Préparer ma nuit", "url": "./#/sleep" },
+    { "name": "Ajouter une nuit", "url": "./#/entry/new" },
+    { "name": "Analyses", "url": "./#/stats" }
   ]
 }

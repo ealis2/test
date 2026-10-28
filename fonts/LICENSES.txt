@@ -1,0 +1,5 @@
+Polices sous licence SIL Open Font License 1.1 (paquets Fontsource) :
+- Fraunces (Undercase Type) — fraunces-opsz.woff2, sous-ensemble latin, axes poids + taille optique
+- Instrument Sans (Instrument) — instrument-sans.woff2, sous-ensemble latin, axe poids
+- IBM Plex Mono (IBM) — plex-mono-400/500.woff2, sous-ensemble latin
+Texte de la licence : https://openfontlicense.org

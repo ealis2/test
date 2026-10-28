@@ -1,0 +1,14 @@
+{
+  "name": "somnia",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Somnia – journal et analyse scientifique du sommeil (PWA sans dépendance, compatible Hostinger)",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "serve": "php -S localhost:8080",
+    "package": "node scripts/package.mjs"
+  },
+  "license": "UNLICENSED"
+}

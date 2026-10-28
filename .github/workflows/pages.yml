@@ -1,42 +1,55 @@
-# Publie automatiquement Somnia sur GitHub Pages à chaque mise à jour.
-# Adresse : https://<utilisateur>.github.io/<dépôt>/
-# Prérequis (une seule fois) : Settings → Pages → Source : « GitHub Actions ».
-name: Publier Somnia
+# Vérifie Somnia (tests, syntaxe) puis publie la démo statique sur GitHub Pages
+# et le paquet ZIP pour Hostinger. Sur GitHub Pages, PHP n'existe pas : l'app
+# fonctionne entièrement, sauf les notifications de secours (réservées à Hostinger).
+name: Somnia
 
 on:
   push:
     branches: [main, claude/iphone-sleep-tracker-app-twjbdm]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Vérifier PHP
+        run: php -v && php -m | grep -E "openssl|curl"
+      - name: Vérifications (syntaxe, service worker)
+        run: node scripts/check.mjs
+      - name: Tests (calculs, données, alarmes, service push PHP)
+        run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Vérifier le JavaScript
-        run: for f in js/*.js sw.js; do node --check "$f"; done
-
       - name: Préparer le site
         run: |
+          node scripts/package.mjs
           mkdir -p _site
-          cp -r index.html manifest.webmanifest sw.js css js icons _site/
+          cp -r index.html manifest.webmanifest sw.js css js fonts icons design _site/
+          mkdir -p _site/docs && cp docs/PRIVACY.md _site/docs/
+          cp dist/somnia-hostinger.zip _site/
           touch _site/.nojekyll
-          # Paquet ZIP (pour Hostinger) téléchargeable depuis le site
-          zip -qr _site/somnia-hostinger.zip index.html manifest.webmanifest sw.js .htaccess css js icons api/science.php
-
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

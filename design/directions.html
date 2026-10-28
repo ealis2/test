@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Somnia — Trois directions artistiques</title>
+<meta name="robots" content="noindex">
+<style>
+  @font-face { font-family: 'Fraunces'; src: url(../fonts/fraunces-opsz.woff2) format('woff2'); font-weight: 100 900; font-display: swap; }
+  @font-face { font-family: 'Instrument Sans'; src: url(../fonts/instrument-sans.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
+  @font-face { font-family: 'Plex Mono'; src: url(../fonts/plex-mono-400.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #0e0f12; color: #e8e8ec; font: 15px/1.5 'Instrument Sans', system-ui, sans-serif; padding: 32px 16px 64px; }
+  header { max-width: 1180px; margin: 0 auto 32px; }
+  h1 { font: 600 34px/1.1 'Fraunces', serif; letter-spacing: -.01em; }
+  header p { color: #a4a6b0; max-width: 70ch; margin-top: 8px; }
+  .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 28px; }
+  .dir { display: flex; flex-direction: column; gap: 14px; }
+  .dir h2 { font: 600 20px 'Fraunces', serif; }
+  .dir .tag { font: 12px 'Plex Mono', monospace; color: #8b8e99; text-transform: uppercase; letter-spacing: .08em; }
+  .phone { width: 100%; max-width: 340px; aspect-ratio: 9 / 18.5; border-radius: 38px; overflow: hidden; position: relative; border: 1px solid #2a2c33; align-self: center; }
+  .notes { font-size: 14px; color: #b8bac3; }
+  .notes b { color: #fff; font-weight: 600; }
+  .swatches { display: flex; gap: 6px; }
+  .swatches i { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #ffffff22; }
+  table { max-width: 1180px; margin: 40px auto 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid #262830; text-align: left; }
+  th { font: 500 12px 'Plex Mono', monospace; color: #8b8e99; text-transform: uppercase; letter-spacing: .06em; }
+  td.win { color: #f2b66d; font-weight: 600; }
+  .verdict { max-width: 1180px; margin: 24px auto 0; padding: 18px 20px; border: 1px solid #3a3226; border-radius: 14px; background: #17140f; color: #e8dccb; }
+
+  /* ---------- A. Observatoire ---------- */
+  .A { background: radial-gradient(120% 60% at 50% 110%, #2a1e14 0%, #0c1020 45%, #070912 100%); color: #eef0f7; font-family: 'Instrument Sans'; padding: 54px 22px 0; }
+  .A .eyebrow { font: 11px 'Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: #8d95b3; }
+  .A .big { font: 400 54px/1 'Fraunces', serif; font-variation-settings: 'opsz' 144; margin: 6px 0 2px; }
+  .A .big small { font-size: 22px; color: #aab1c8; }
+  .A .sub { color: #aab1c8; font-size: 13px; }
+  .A svg { display: block; margin: 18px auto 10px; }
+  .A .row { display: flex; justify-content: space-between; border-top: 1px solid rgba(196,206,255,.1); padding: 11px 0; font-size: 13px; color: #aab1c8; }
+  .A .row b { color: #eef0f7; font: 500 13px 'Plex Mono', monospace; }
+  .A .cta { position: absolute; left: 22px; right: 22px; bottom: 26px; height: 52px; border-radius: 26px; background: #f2b66d; color: #1b1206; display: grid; place-items: center; font-weight: 600; box-shadow: 0 8px 30px -6px #f2b66d66; }
+
+  /* ---------- B. Papier de nuit ---------- */
+  .B { background: #1b1519; color: #efe6da; padding: 54px 24px 0; font-family: 'Fraunces', serif; }
+  .B::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(#ffffff08 1px, transparent 1px); background-size: 3px 3px; pointer-events: none; }
+  .B .date { font: italic 400 14px 'Fraunces'; color: #b9a99a; }
+  .B .big { font: 300 64px/1 'Fraunces'; font-variation-settings: 'opsz' 144; margin-top: 10px; letter-spacing: -.02em; }
+  .B .lede { font-size: 17px; line-height: 1.45; margin-top: 12px; color: #d9cdbd; }
+  .B .lede em { color: #e39a76; font-style: normal; }
+  .B .ink { margin-top: 26px; height: 120px; background: linear-gradient(90deg, transparent, #e39a7622 20%, #e39a7655 50%, #e39a7622 80%, transparent); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 120'%3E%3Cpath d='M0 90 C40 40 60 100 100 60 S160 20 200 70 S260 100 300 50' stroke='black' stroke-width='18' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") center/100% 100% no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 120'%3E%3Cpath d='M0 90 C40 40 60 100 100 60 S160 20 200 70 S260 100 300 50' stroke='black' stroke-width='18' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") center/100% 100% no-repeat; }
+  .B .cta { position: absolute; left: 24px; right: 24px; bottom: 26px; padding: 14px; border: 1px solid #e39a76; color: #e39a76; text-align: center; font: 500 16px 'Fraunces'; border-radius: 4px; }
+
+  /* ---------- C. Abysse ---------- */
+  .C { background: radial-gradient(80% 50% at 30% 20%, #0c3b35 0%, #04110f 70%); color: #d8fff4; padding: 54px 22px 0; font-family: 'Instrument Sans'; }
+  .C .blob { position: absolute; width: 260px; height: 260px; right: -80px; top: 120px; border-radius: 50%; background: radial-gradient(circle, #5ef2c855, transparent 70%); filter: blur(10px); }
+  .C .big { font: 700 58px/1 'Instrument Sans'; margin-top: 14px; text-shadow: 0 0 24px #5ef2c8aa; }
+  .C .sub { color: #7fc9b6; font-size: 13px; }
+  .C .wave { margin-top: 30px; }
+  .C .chip { display: inline-block; margin: 18px 6px 0 0; padding: 8px 14px; border-radius: 99px; background: #5ef2c81a; border: 1px solid #5ef2c855; font-size: 12px; }
+  .C .cta { position: absolute; left: 22px; right: 22px; bottom: 26px; height: 52px; border-radius: 18px; background: linear-gradient(90deg, #5ef2c8, #3ab7ff); color: #022; display: grid; place-items: center; font-weight: 700; box-shadow: 0 0 40px #5ef2c877; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Trois directions artistiques</h1>
+  <p>Planche de comparaison pour l'écran d'accueil de Somnia, avec la même donnée : nuit de 7 h 18, coucher à 23:12, lever à 06:48. Les trois maquettes utilisent de vraies polices et de vraies couleurs, mais elles ne sont pas interactives. La direction retenue est appliquée à toute l'application.</p>
+</header>
+
+<div class="grid">
+  <section class="dir">
+    <span class="tag">Direction A</span>
+    <h2>Observatoire — lampe de chevet</h2>
+    <div class="phone A" role="img" aria-label="Maquette de la direction Observatoire">
+      <div class="eyebrow">Nuit du mar. 27 → mer. 28</div>
+      <div class="big">7 h <small>18</small></div>
+      <div class="sub">de sommeil estimé · objectif 7 h 30</div>
+      <svg width="240" height="240" viewBox="-120 -120 240 240" aria-hidden="true">
+        <circle r="100" fill="none" stroke="#c4ceff1a"/>
+        <circle r="82" fill="none" stroke="#c4ceff10"/>
+        <g stroke="#8d95b3" stroke-width="1">
+          <line y1="-100" y2="-92"/><line y1="100" y2="92"/><line x1="-100" x2="-92"/><line x1="100" x2="92"/>
+        </g>
+        <path d="M -55.6 -83.1 A 100 100 0 0 1 83.0 55.8" fill="none" stroke="#9db7ff" stroke-width="10" stroke-linecap="round" opacity=".9" transform="rotate(-90) rotate(180)"/>
+        <circle r="5" cx="0" cy="-100" fill="#f2b66d" transform="rotate(102)"/>
+        <text y="6" text-anchor="middle" fill="#aab1c8" font-family="Plex Mono" font-size="11">23:12 → 06:48</text>
+      </svg>
+      <div class="row"><span>Régularité (SRI)</span><b>78</b></div>
+      <div class="row"><span>7 nuits vs précédentes</span><b>+24 min</b></div>
+      <div class="cta">Préparer ma nuit</div>
+    </div>
+    <div class="swatches"><i style="background:#070912"></i><i style="background:#131a2e"></i><i style="background:#9db7ff"></i><i style="background:#c3a8ff"></i><i style="background:#f2b66d"></i><i style="background:#eef0f7"></i></div>
+    <p class="notes"><b>Idée :</b> un instrument d'astronomie posé près du lit. Le fond est encre, les lignes sont fines comme des graduations, et la seule source chaude est une lampe ambre qui sert aux actions et au matin. La nuit se lit sur un cadran de 24 h. Le coucher prend le violet du crépuscule, le lever l'ambre de l'aube. <b>Typographie :</b> Fraunces (serif à taille optique) pour les chiffres clés, Instrument Sans pour l'interface, Plex Mono pour les heures et les axes. <b>Mouvement :</b> rotations lentes du cadran, un horizon qui se réchauffe à l'approche du réveil.</p>
+  </section>
+
+  <section class="dir">
+    <span class="tag">Direction B</span>
+    <h2>Papier de nuit — éditorial</h2>
+    <div class="phone B" role="img" aria-label="Maquette de la direction Papier de nuit">
+      <div class="date">mercredi 28 octobre</div>
+      <div class="big">7 h 18</div>
+      <p class="lede">Vous vous êtes couché à <em>23:12</em> et levé à <em>06:48</em>. Votre semaine est un peu plus longue que la précédente.</p>
+      <div class="ink" aria-hidden="true"></div>
+      <div class="cta">Préparer ma nuit</div>
+    </div>
+    <div class="swatches"><i style="background:#1b1519"></i><i style="background:#2a2126"></i><i style="background:#efe6da"></i><i style="background:#b9a99a"></i><i style="background:#e39a76"></i></div>
+    <p class="notes"><b>Idée :</b> un carnet relié, de l'encre sur du papier sombre, un grain discret. Les données sont racontées en phrases. <b>Typographie :</b> une seule serif, avec des contrastes d'échelle marqués. <b>Graphiques :</b> des traits d'encre au pinceau. <b>Mouvement :</b> fondus et pages qui se tournent.</p>
+  </section>
+
+  <section class="dir">
+    <span class="tag">Direction C</span>
+    <h2>Abysse — bioluminescence</h2>
+    <div class="phone C" role="img" aria-label="Maquette de la direction Abysse">
+      <div class="blob"></div>
+      <div class="sub">Dernière nuit</div>
+      <div class="big">7:18</div>
+      <svg class="wave" width="100%" height="90" viewBox="0 0 300 90" aria-hidden="true"><path d="M0 60 Q25 20 50 55 T100 50 T150 35 T200 60 T250 30 T300 45" fill="none" stroke="#5ef2c8" stroke-width="3" style="filter: drop-shadow(0 0 6px #5ef2c8)"/></svg>
+      <span class="chip">Score 82</span><span class="chip">Profond 1 h 40</span>
+      <div class="cta">Dormir</div>
+    </div>
+    <div class="swatches"><i style="background:#04110f"></i><i style="background:#0c3b35"></i><i style="background:#5ef2c8"></i><i style="background:#3ab7ff"></i><i style="background:#d8fff4"></i></div>
+    <p class="notes"><b>Idée :</b> les fonds marins, des formes organiques qui luisent. <b>Typographie :</b> une sans-serif grasse. <b>Graphiques :</b> des ondes lumineuses. <b>Mouvement :</b> des pulsations et des halos.</p>
+  </section>
+</div>
+
+<table>
+  <thead><tr><th>Critère (1–5)</th><th>A · Observatoire</th><th>B · Papier de nuit</th><th>C · Abysse</th></tr></thead>
+  <tbody>
+    <tr><td>Originalité</td><td class="win">4 — cadran de 24 h et actogramme comme signature</td><td>4 — très singulier pour une app de santé</td><td>2 — halo néon courant, proche des modèles</td></tr>
+    <tr><td>Lisibilité des données</td><td class="win">5 — chiffres tabulaires, échelles explicites</td><td>3 — le récit dilue la densité, peu de graphiques</td><td>2 — les halos réduisent la netteté</td></tr>
+    <tr><td>Cohérence avec la science</td><td class="win">5 — l'heure d'horloge est l'unité centrale de la chronobiologie</td><td>3</td><td>1 — affiche des « phases » et un « score » non mesurés ; lumière cyan</td></tr>
+    <tr><td>Accessibilité (contraste, mouvement)</td><td class="win">5 — textes ≥ 7:1 sur le fond, mouvement réductible</td><td>4 — crème sur prune correct, textures à neutraliser</td><td>2 — contrastes variables sur dégradés</td></tr>
+    <tr><td>Adéquation au coucher</td><td class="win">5 — sombre, chaleur ambre limitée aux actions</td><td>4</td><td>2 — vert-cyan saturé peu apaisant</td></tr>
+    <tr><td><b>Total</b></td><td class="win"><b>24 / 25</b></td><td>18 / 25</td><td>9 / 25</td></tr>
+  </tbody>
+</table>
+
+<p class="verdict"><b>Retenue : A · Observatoire</b>, avec deux emprunts à B : Fraunces pour les chiffres clés, qui donne de la chaleur à un univers technique, et des phrases de synthèse en tête des analyses. La lumière ambre est réservée aux actions principales et au réveil. Aucune grande surface n'est en bleu vif la nuit.</p>
+</body>
+</html>

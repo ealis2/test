@@ -1,4 +1,6 @@
-api/cache/
+api/data/*
+!api/data/.htaccess
+api/config.local.php
 .DS_Store
 node_modules/
 dist/

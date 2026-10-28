@@ -1,128 +1,115 @@
-# 🌙 Somnia – Suivi du sommeil pour iPhone
+# 🌙 Somnia — journal et analyse scientifique du sommeil
 
-Application de suivi du sommeil **installable sur iPhone** (PWA), hébergée sur Hostinger
-à l'adresse **https://cryptologist.pro** (ou dans un sous-dossier, ex. `https://cryptologist.pro/sommeil/`).
+Somnia est une application web progressive (PWA) installable sur iPhone, Android et ordinateur. Elle est hébergée sur **Hostinger** à l'adresse `https://cryptologist.pro`, à la racine ou dans un sous-dossier comme `/sommeil/`.
 
-Aucun Mac, aucun Xcode, aucun compte développeur Apple (99 €/an) : tout se fait depuis l'iPhone
-et le panneau Hostinger.
+- **Journal du sommeil** standardisé, au format de l'agenda du sommeil consensuel.
+- **Mode sommeil** avec réveil.
+- **Statistiques détaillées et honnêtes** : effectifs, valeurs manquantes et méthodes toujours visibles.
+- **Repères scientifiques sourcés.**
+- **Données personnelles** conservées sur l'appareil.
 
-## Les 5 rubriques
+> Somnia n'est pas un dispositif médical : elle ne pose aucun diagnostic.
 
-| Onglet | Contenu |
+## Fonctionnalités opérationnelles
+
+| Section | Ce qui fonctionne réellement |
 |---|---|
-| 🌙 **Nuit** | Suivi de la nuit (accéléromètre + niveau sonore du micro), écran de nuit sombre, **réveil intelligent** (sonne pendant un sommeil léger dans une fenêtre de 10 à 45 min), heures de coucher idéales selon les cycles de 90 min, bilan du matin (score, hypnogramme, ressenti, habitudes). |
-| 📓 **Journal** | Historique de toutes les nuits : score, horaires, mini-hypnogramme, détail des phases (profond, léger, paradoxal, éveil), efficacité, endormissement, réveils, bruits détectés, notes. Ajout manuel possible. |
-| 📊 **Analyses** | Tendances sur 7 j / 30 j / 3 mois : durée vs objectif, courbe du score, régularité des horaires, phases moyennes, dette de sommeil, **impact de tes habitudes** (café, sport, écrans…) sur ton score, conseils personnalisés. |
-| 🎧 **Détente** | 9 sons générés en direct et mixables (pluie, océan, vent, feu, ventilateur, orage, bruits blanc/rose/brun), minuteur avec fondu, respiration guidée (4-7-8, cohérence cardiaque, carrée), routine du coucher. |
-| 🔬 **Science** | **Données en temps réel** : météo et humidité de la nuit, qualité de l'air, lever/coucher du soleil (Open-Meteo), phase de la lune, calculateur de cycles, recommandations par âge (National Sleep Foundation) et **dernières publications scientifiques** sur le sommeil (Europe PMC / PubMed), faits scientifiques sourcés. |
+| **Accueil** | Dernière nuit (cadran 24 h), moyenne sur 7 jours comparée à la semaine précédente, régularité (SRI), bilan sur 7 nuits, prochain réveil, observations datées et sourcées. |
+| **Dormir** | Choix de l'heure de réveil, du son (3 sons synthétisés), du volume, de la montée progressive et de la répétition. Récapitulatif du sommeil possible, calculé avec votre latence médiane. Écran de nuit minimaliste avec horizon qui se réchauffe, mode « assombrir », modification ou annulation de la session. **Session conservée après fermeture ou rechargement.** Sonnerie plein écran (arrêter / répéter), retard enregistré si l'app était suspendue. Bilan du matin : latence, réveils, durée d'éveil, qualité, facilité du réveil, contexte, notes. |
+| **Journal** | Liste filtrable (nuits, siestes, à compléter). **Calendrier** mensuel : couleurs relatives à l'objectif, moyennes hebdomadaires, siestes, saisies incohérentes, navigation au clavier, panneau du jour sans quitter le mois. Fiche détaillée : horaires, indicateurs, contexte, chronologie de la session et de l'alarme, nuit précédente / suivante. Ajout, correction et suppression (avec annulation). |
+| **Analyses** | 8 sections : synthèse « s'améliore / se dégrade / stable », durée, horaires (actogramme), régularité et rythme, qualité et continuité, habitudes, comparaison de périodes et avant / après, qualité des données. Le détail figure plus bas. |
+| **Science** | Durées recommandées par tranche d'âge (NSF, AASM/SRS), repères de continuité (NSF), fiche de chaque indicateur, expériences personnelles avec niveau de preuve, limites des appareils, quand consulter, **32 références** avec DOI. |
+| **Réveils** | Alarmes récurrentes (jours au choix) ; objectif de lever et de sommeil, avec heure de coucher conseillée ; rappel du coucher ; notifications de secours (Web Push) avec diagnostic et bouton de test ; export calendrier `.ics` ; historique (sonné, répété, arrêté, retard). |
+| **Réglages** | Objectif, tranche d'âge, thème Nuit / Aube (clair) / système, animations réduites. Export JSON et CSV, import JSON et CSV, démonstration identifiée, suppression totale, confidentialité. |
 
-Réglages (⚙️) : objectif de sommeil, âge, capteurs, ville, export/import des données, nuits de démo.
+**Détail des statistiques.** Moyenne, médiane, minimum, maximum et écart-type, toujours avec leur effectif. Statistiques circulaires pour les heures. Moyennes glissantes, hebdomadaires et mensuelles. Distribution, bilan cumulé sur 7 nuits, tendance (Theil–Sen et Mann–Kendall), changements inhabituels (Welch). SRI, jet-lag social, profil par jour de la semaine, part des nuits atteignant les repères NSF. Associations exploratoires (Welch avec IC 95 %, Spearman, correction de Benjamini–Hochberg). Comparaison de deux périodes ou avant / après un changement. Bande de complétude et provenance des données.
 
-## Installer en un bouton (GitHub Pages, gratuit)
+## Limites assumées
 
-L'app est publiée automatiquement à chaque mise à jour par `.github/workflows/pages.yml`.
+- **Alarme sur le web.** La sonnerie retentit si Somnia est **ouverte au premier plan** : l'écran reste allumé via Wake Lock, qui fonctionne en mode app à partir d'iOS 18.4. Si l'app est fermée, iOS la suspend. Deux filets de sécurité existent alors :
+  - une **notification push** envoyée par le serveur : un son unique, puis une relance 5 min plus tard, en respectant le mode silencieux ; elle n'est disponible sur iPhone que pour l'app ajoutée à l'écran d'accueil, avec iOS 16.4 ou plus récent ;
+  - un **rappel de calendrier** (`.ics`).
 
-**À faire une seule fois (depuis Safari sur l'iPhone, onglet « Version pour ordinateur » si besoin) :**
-1. github.com/ealis2/test → **Settings** → **General** → tout en bas **Change visibility** → **Public**
-   (GitHub Pages est gratuit uniquement pour les dépôts publics ; tes nuits ne sont jamais dans le dépôt).
-2. **Settings** → **Pages** → *Build and deployment* → Source : **GitHub Actions**.
-3. **Actions** → « Publier Somnia » → **Run workflow**.
+  Pour un réveil important, gardez une alarme système.
+- **Pas de « réveil intelligent ».** Aucune mesure fiable ne permet de détecter le sommeil léger avec un téléphone, et son bénéfice n'est pas démontré. L'app l'explique au lieu de le simuler.
+- **Pas de phases de sommeil ni de score global.** Le journal est déclaratif. Une donnée mesurée importée (montre) est stockée à part et marquée « mesurée ».
+- **Pas d'accès à Apple Santé / Health Connect** : ces services sont réservés aux apps natives. Le modèle de données est prêt à recevoir leurs données (voir `docs/ARCHITECTURE.md`).
+- **Références scientifiques.** Elles ont été recoupées dans plusieurs index, mais l'environnement de développement ne pouvait pas ouvrir Crossref ni PubMed : leur DOI est cliquable pour vérification (voir `docs/SCIENCE.md`).
 
-Lien à ouvrir (et à partager) : **https://ealis2.github.io/test/**
-→ écran d'accueil avec le bouton **« Installer Somnia »** qui guide l'ajout à l'écran d'accueil.
-Sur Android / Chrome, le bouton installe directement l'app en un geste.
+## Lancer en local
 
-Le ZIP pour Hostinger est aussi téléchargeable sur https://ealis2.github.io/test/somnia-hostinger.zip
+```bash
+php -S 127.0.0.1:8080          # sert l'app et l'API PHP
+# puis ouvrir http://127.0.0.1:8080
+```
+
+Sans PHP, un simple serveur statique (`npx http-server`) suffit pour toute l'app, sauf les notifications de secours.
+
+**Données de démonstration :** Réglages → Charger la démonstration. Ce sont 120 nuits synthétiques, signalées partout et supprimables en un geste.
+
+## Tests
+
+```bash
+npm test                                   # 63 tests Node (calculs, fuseaux, données, alarmes, service push PHP)
+npm run check                              # syntaxe JS/PHP, imports, couverture du mode hors ligne
+node scripts/smoke.mjs                     # tous les écrans dans Chromium (mobile + ordinateur), erreurs et débordements
+node scripts/e2e-session.mjs               # nuit complète simulée de bout en bout
+```
+
+Résultats au 28 octobre 2026 :
+
+- `npm test` : **63 / 63 réussis** en moins d'une seconde.
+- `scripts/smoke.mjs` : **22 écrans × 2 formats** sans erreur ni débordement.
+- `scripts/e2e-session.mjs` : parcours réussi (démarrage, rechargement, alarme, répétition, arrêt, bilan, journal, refus d'une saisie incohérente).
+- Audit axe-core (WCAG 2 AA) : **0 violation** sur 18 écrans × 2 thèmes.
+
+Ce qui n'a **pas** pu être testé ici :
+
+- la réception réelle d'une notification sur un iPhone (le flux push est vérifié contre un service push simulé, signature et chiffrement compris) ;
+- le comportement d'Apache / LiteSpeed avec le `.htaccess` (testé avec le serveur PHP intégré).
 
 ## Mettre en ligne sur Hostinger
 
-### Option A – Déploiement Git (recommandé, mises à jour automatiques)
-1. hPanel → **Sites web** → cryptologist.pro → **Avancé → Git**.
-2. Dépôt : `https://github.com/ealis2/test.git`, branche : celle à déployer (ex. `main`).
-3. Dossier d'installation : laisser vide pour la racine, ou `sommeil` pour `https://cryptologist.pro/sommeil/`.
-   ⚠️ Le déploiement à la racine exige un `public_html` vide : si ton site crypto y est déjà, utilise `sommeil`.
-4. Cliquer **Créer**, puis **Déployer**. (Optionnel : activer le webhook pour déployer à chaque push.)
+### Option A — Déploiement Git (mises à jour automatiques)
 
-### Option B – Sans GitHub, depuis l'iPhone (fichier ZIP)
-Utiliser `somnia-hostinger.zip` (instructions dans `LISEZ-MOI.txt` à l'intérieur) : le téléverser dans
-`public_html/sommeil` via le Gestionnaire de fichiers de hPanel, puis « Extraire ».
+1. Ouvrez hPanel → **Sites web** → cryptologist.pro → **Avancé → Git**.
+2. Indiquez le dépôt `https://github.com/ealis2/test.git` et la branche à publier.
+3. Choisissez le dossier : `sommeil` (recommandé si un site existe déjà à la racine), ou vide pour la racine. Le déploiement à la racine exige un `public_html` vide.
+4. Cliquez sur **Créer**, puis sur **Déployer**. Vous pouvez activer le webhook pour déployer à chaque push.
 
-### Option C – Gestionnaire de fichiers (ZIP GitHub)
-1. Télécharger le dépôt en ZIP depuis GitHub (bouton **Code → Download ZIP**).
-2. hPanel → **Gestionnaire de fichiers** → `public_html` (ou créer `public_html/sommeil`).
-3. Téléverser le ZIP, clic droit → **Extraire**, et vérifier que `index.html` est directement dans le dossier.
+### Option B — Fichier ZIP
 
-### Vérifications
-- **SSL activé** (hPanel → Sécurité → SSL) : obligatoire, l'iPhone refuse micro, capteurs,
-  géolocalisation et installation sans HTTPS. Le `.htaccess` force déjà la redirection HTTPS.
-- **PHP 8.x** (hPanel → Avancé → Configuration PHP) pour `api/science.php`, le proxy qui récupère
-  les publications scientifiques et les met en cache 6 h. S'il ne fonctionne pas, l'app appelle
-  Europe PMC directement.
+1. Lancez `npm run package`, ou téléchargez `somnia-hostinger.zip` depuis la page GitHub Pages.
+2. hPanel → **Gestionnaire de fichiers** → `public_html/sommeil` → téléversez le ZIP, puis faites **Extraire**.
 
-## Installer sur l'iPhone 15
-1. Ouvrir **Safari** (pas Chrome) sur `https://cryptologist.pro/sommeil/` (ou la racine).
-2. Toucher **Partager** ⎋ → **Sur l'écran d'accueil** → **Ajouter**.
-3. Lancer Somnia depuis l'icône : l'app s'ouvre en plein écran, fonctionne hors ligne.
+### Réglages Hostinger
 
-## Précision des analyses
-- **Éveil / sommeil** : algorithme d'actigraphie de **Cole-Kripke** (Sleep, 1992) + règles de correction de
-  **Webster** (1982), méthodes validées face à la polysomnographie (~85-90 % d'accord minute par minute).
-  Calibré pour qu'un simple retournement ne compte pas comme un réveil.
-- **Endormissement** : premier bloc de 10 min de sommeil continu. **Réveils** : éveils de 3 min ou plus.
-- **Cycles** : découpés sur tes propres mouvements (70-120 min) plutôt que sur une durée fixe.
-- **Respiration** : rythme et régularité respiratoires mesurés chaque minute par autocorrélation, à partir du micro
-  (bande 150-1500 Hz) et des micro-vibrations du matelas (accéléromètre à 4 Hz). Ronflements détectés.
-- **Phases profond / léger / paradoxal** : modèle de Markov caché (Viterbi) combinant mouvements, respiration
-  (rangs au sein de ta nuit), pression de sommeil (Processus S de Borbély), position dans le cycle ultradien,
-  propension circadienne au paradoxal et latence minimale du paradoxal. Cela reste une estimation : sans EEG,
-  aucune app ne mesure les phases directement.
-- **Rythme circadien** : Sleep Regularity Index (Phillips 2017), chronotype MCTQ et jet-lag social (Roenneberg).
-- **Tests cliniques validés** : ISI (insomnie), Epworth (somnolence), rMEQ (chronotype), STOP-BANG (apnée).
-- **Indice de fiabilité** par nuit : détecte les coupures de mesure (app en pause), un iPhone posé ailleurs que sur le matelas, les nuits trop courtes.
-- Le **score** repose surtout sur les données mesurées (durée, efficacité, endormissement, éveils) ; les phases estimées ne pèsent que 10 points.
+- **SSL actif** (hPanel → Sécurité → SSL) : indispensable pour la PWA, le service worker et le push. Le `.htaccess` force déjà HTTPS.
+- **PHP 8.1 ou plus**, avec les extensions `openssl` et `curl` (hPanel → Avancé → Configuration PHP). Elles sont présentes par défaut.
+- **Notifications de secours.** Créez une tâche cron **chaque minute** (hPanel → Avancé → **Tâches Cron**) :
+  - type « PHP » ;
+  - chemin : `domains/cryptologist.pro/public_html/sommeil/api/cron.php`, à adapter au dossier choisi.
 
-## Utilisation la nuit
-1. Brancher l'iPhone au chargeur, le poser **sur le matelas** près de l'oreiller, écran vers le haut.
-2. Toucher **Commencer ma nuit**, autoriser *Mouvement et orientation* et *Micro*.
-3. Laisser l'app ouverte : l'écran reste allumé en très sombre (toucher pour l'assombrir davantage).
-4. Le matin : arrêter l'alarme ou **maintenir** le bouton pour terminer la nuit.
+  L'écran **Réveils** de l'app indique si la tâche tourne (« Tâche planifiée active »).
+- *(Facultatif)* Variables `SOMNIA_DATA_DIR`, pour stocker les abonnements hors de `public_html`, et `SOMNIA_VAPID_SUBJECT`. On peut aussi les définir dans un fichier `api/config.local.php` qui renvoie un tableau ; ce fichier n'est jamais publié dans le dépôt.
 
-**Limites d'une app web sur iOS (à connaître)** :
-- iOS met en pause les apps web quand l'écran est verrouillé : il faut laisser Somnia **ouverte**
-  (elle garde l'écran allumé automatiquement). C'est aussi pour cela que le réveil ne sonne que si
-  l'app est ouverte : garde une alarme de secours dans l'app Horloge.
-- Désactive le verrouillage automatique si l'écran s'éteint malgré tout (Réglages → Luminosité → Verrouillage auto).
-- Pas d'accès à Apple Santé / Apple Watch (réservé aux apps natives).
-- Le micro mesure uniquement un **niveau sonore** ; aucun son n'est enregistré ni envoyé.
-- Toutes les nuits restent **sur l'iPhone** (stockage local). Exporte-les régulièrement (⚙️ → Exporter).
+### Installer sur l'iPhone
 
-## Tester en local sur un ordinateur
-```bash
-php -S localhost:8080        # ou : npx http-server
-```
-Puis ouvrir http://localhost:8080 (les capteurs ne fonctionnent que sur l'iPhone, en HTTPS).
+Ouvrez `https://cryptologist.pro/sommeil/` dans **Safari**, puis touchez Partager → **Sur l'écran d'accueil**. Lancez ensuite Somnia depuis son icône : c'est obligatoire pour les notifications.
 
-## Structure
-```
-index.html            Page principale
-css/style.css         Design (thème nuit, adapté à l'iPhone : encoche, Dynamic Island)
-js/app.js             Les 5 rubriques et les réglages
-js/tracker.js         Capteurs, écran allumé, réveil intelligent
-js/analysis.js        Estimation des phases, score, statistiques
-js/charts.js          Graphiques SVG
-js/sounds.js          Sons relaxants et sonnerie (Web Audio)
-js/science.js         Données temps réel (Open-Meteo, Europe PMC)
-js/signal.js          Détection de la respiration (autocorrélation)
-js/tests.js           Questionnaires cliniques (ISI, Epworth, rMEQ, STOP-BANG)
-js/install.js         Écran et bouton d'installation
-.github/workflows/    Publication automatique sur GitHub Pages
-api/science.php       Proxy + cache pour les publications scientifiques
-sw.js                 Fonctionnement hors ligne
-manifest.webmanifest  Installation sur l'écran d'accueil
-.htaccess             HTTPS, cache, sécurité (Hostinger / LiteSpeed)
-```
+Les nuits enregistrées avec l'ancienne version de Somnia (v1) sont reprises automatiquement au premier lancement : horaires et ressenti.
 
-Après une modification, incrémenter `VERSION` dans `sw.js` pour que les iPhones récupèrent la mise à jour.
+### GitHub Pages
 
-> Somnia estime les phases de sommeil par actigraphie et modèle des cycles, comme les applis grand
-> public. Ce n'est pas un dispositif médical.
+Le workflow `.github/workflows/pages.yml` lance les tests puis publie une démo statique et le ZIP. GitHub Pages n'exécute pas PHP, donc les notifications de secours y sont indisponibles. L'app le détecte et l'indique.
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` : choix PWA, modules, modèle de données, migrations, alarmes, intégrations futures.
+- `docs/METRICS.md` : chaque indicateur (formule, unités, valeurs manquantes, limites, tests). Fichier généré depuis le code.
+- `docs/SCIENCE.md` : recommandations, expériences, limites, bibliographie complète. Fichier généré depuis le code.
+- `docs/DESIGN.md` et `design/directions.html` : les trois directions artistiques, le système de design, l'accessibilité.
+- `docs/PRIVACY.md` : politique de confidentialité.
+- `docs/research/sources-verifiees.md` : vérification des sources et veille concurrentielle.
+
+Après une modification d'un fichier de l'app, incrémentez `VERSION` dans `sw.js` (`npm run check` vérifie que chaque fichier figure dans le cache hors ligne), puis lancez `node scripts/gen-docs.mjs` si le contenu scientifique a changé.
